@@ -404,7 +404,7 @@ export function OutfitBuilderExperience({
                       setPickerSlot(slot);
                       setPickerSearch("");
                     }}
-                    className="rounded-xl border border-white/20 px-3 py-2 text-xs hover:bg-white/10"
+                    className="rounded-xl border border-zinc-100/60 bg-zinc-100/10 px-3 py-2 text-xs font-semibold text-zinc-100 transition hover:bg-zinc-100/20"
                   >
                     Open {slotLabels[slot]}
                   </button>
@@ -444,20 +444,20 @@ export function OutfitBuilderExperience({
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <button
               onClick={handleAddOutfitToCart}
-              className="rounded-xl bg-zinc-100 px-4 py-3 text-sm font-semibold text-zinc-950 transition hover:bg-white"
+              className="rounded-xl bg-zinc-100 px-4 py-3 text-sm font-semibold text-zinc-950 shadow-[0_6px_20px_rgba(255,255,255,0.18)] transition hover:bg-white"
             >
               Add Outfit to Cart
             </button>
             <button
               onClick={resetAll}
-              className="rounded-xl border border-white/20 px-4 py-3 text-sm text-zinc-100 hover:bg-white/10"
+              className="rounded-xl border border-white/30 bg-white/5 px-4 py-3 text-sm text-zinc-100 transition hover:bg-white/10"
             >
               Reset Outfit
             </button>
             {!compact ? (
               <button
                 onClick={handleAddOutfitAndCheckout}
-                className="rounded-xl border border-white/20 px-4 py-2.5 text-sm text-zinc-100 hover:bg-white/10 sm:col-span-2"
+                className="rounded-xl border border-white/30 bg-white/5 px-4 py-2.5 text-sm font-medium text-zinc-100 transition hover:bg-white/10 sm:col-span-2"
               >
                 Add Outfit & Checkout
               </button>

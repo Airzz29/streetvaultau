@@ -30,7 +30,13 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const user = await requireUser();
+  let user = null;
+  try {
+    user = await requireUser();
+  } catch (error) {
+    console.error("Failed to resolve user session in RootLayout", error);
+    user = null;
+  }
 
   return (
     <html lang="en">

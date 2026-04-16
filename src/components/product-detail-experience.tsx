@@ -28,7 +28,11 @@ function resolveColorImages(product: ProductWithVariants, color: string) {
     (entry) => entry.color.trim().toLowerCase() === color.trim().toLowerCase()
   );
   const main = group?.mainImage ?? product.mainImage ?? product.images[0];
-  const gallery = group?.galleryImages?.length ? group.galleryImages : product.images;
+  const gallery = group
+    ? group.galleryImages?.length
+      ? group.galleryImages
+      : [main]
+    : product.images;
   const merged = Array.from(new Set([main, ...gallery].filter(Boolean)));
   return { mainImage: merged[0] ?? product.images[0], galleryImages: merged };
 }
