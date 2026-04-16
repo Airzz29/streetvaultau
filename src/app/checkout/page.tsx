@@ -53,6 +53,8 @@ export default function CheckoutPage() {
     phone: "",
     isDefault: false,
   });
+  const [useNewAddressForOrder, setUseNewAddressForOrder] = useState(false);
+  const [saveAddressForFuture, setSaveAddressForFuture] = useState(false);
   const [editingAddress, setEditingAddress] = useState<Address | null>(null);
   const [editDraft, setEditDraft] = useState({
     firstName: "",
@@ -111,6 +113,7 @@ export default function CheckoutPage() {
     setAddresses(loaded);
     const chosen = loaded.find((it) => it.isDefault)?.id ?? loaded[0]?.id ?? "";
     setSelectedAddressId(chosen);
+    setUseNewAddressForOrder(false);
     setQuoteMessage("Address saved.");
   };
 
@@ -140,7 +143,8 @@ export default function CheckoutPage() {
     setQuoteMessage("");
     setReadyForStripe(false);
     const selectedAddress = addresses.find((address) => address.id === selectedAddressId);
-    if (!selectedAddress?.phone?.trim()) {
+    const shouldUseManualAddress = useNewAddressForOrder || !selectedAddress;
+    if (!shouldUseManualAddress && !selectedAddress?.phone?.trim()) {
       setQuoteError("Please add a mobile number to the selected delivery address.");
       return;
     }
@@ -149,7 +153,21 @@ export default function CheckoutPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         items: validItems,
-        addressId: selectedAddressId,
+        addressId: shouldUseManualAddress ? undefined : selectedAddressId,
+        shippingAddress: shouldUseManualAddress
+          ? {
+              firstName: newAddress.firstName,
+              lastName: newAddress.lastName,
+              addressLine1: newAddress.addressLine1,
+              addressLine2: newAddress.addressLine2,
+              city: newAddress.city,
+              stateRegion: newAddress.stateRegion,
+              postcode: newAddress.postcode,
+              country: newAddress.country,
+              phone: newAddress.phone,
+            }
+          : undefined,
+        saveAddressForFuture: shouldUseManualAddress ? saveAddressForFuture : false,
         discountCode: discountCode.trim() || undefined,
       }),
     });
@@ -200,6 +218,14 @@ export default function CheckoutPage() {
           <h2 className="text-lg font-semibold">Delivery address</h2>
           {addresses.length ? (
             <div className="grid gap-2">
+              <label className="flex items-center gap-2 rounded-xl border border-white/10 p-3 text-sm">
+                <input
+                  type="radio"
+                  checked={!useNewAddressForOrder}
+                  onChange={() => setUseNewAddressForOrder(false)}
+                />
+                <span>Use a saved address</span>
+              </label>
               {addresses.map((address) => (
                 <label key={address.id} className="flex items-start gap-2 rounded-xl border border-white/10 p-3 text-sm">
                   <input
@@ -248,6 +274,17 @@ export default function CheckoutPage() {
           ) : (
             <p className="text-sm text-zinc-400">No saved addresses yet. Add one below.</p>
           )}
+          <label className="flex items-center gap-2 rounded-xl border border-white/10 p-3 text-sm">
+            <input
+              type="radio"
+              checked={useNewAddressForOrder || !addresses.length}
+              onChange={() => setUseNewAddressForOrder(true)}
+            />
+            <span>Use a new address for this order</span>
+          </label>
+          <p className="text-xs text-zinc-400">
+            You can checkout directly with the form below. Saving the address is optional.
+          </p>
           <div className="grid gap-2 sm:grid-cols-2">
             <input value={newAddress.firstName} onChange={(e) => setNewAddress((v) => ({ ...v, firstName: e.target.value }))} placeholder="First name" autoComplete="given-name" className="min-h-11 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-sm" />
             <input value={newAddress.lastName} onChange={(e) => setNewAddress((v) => ({ ...v, lastName: e.target.value }))} placeholder="Last name" autoComplete="family-name" className="min-h-11 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-sm" />
@@ -259,6 +296,17 @@ export default function CheckoutPage() {
             <input value={newAddress.country} onChange={(e) => setNewAddress((v) => ({ ...v, country: e.target.value }))} placeholder="Country" autoComplete="country-name" className="min-h-11 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-sm" />
             <input value={newAddress.phone} onChange={(e) => setNewAddress((v) => ({ ...v, phone: e.target.value }))} placeholder="Mobile number (required)" autoComplete="tel" className="min-h-11 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-sm sm:col-span-2" />
           </div>
+          <label className="flex items-center gap-2 text-sm text-zinc-300">
+            <input
+              type="checkbox"
+              checked={saveAddressForFuture}
+              onChange={(event) => setSaveAddressForFuture(event.target.checked)}
+            />
+            Save this address for faster future purchases
+          </label>
+          <p className="text-xs text-zinc-500">
+            If enabled, this address will be available next time so checkout is quicker.
+          </p>
           <button onClick={saveAddress} className="min-h-11 w-full rounded-xl border border-white/20 px-3 py-2 text-sm hover:bg-white/10 sm:w-auto">
             Save Address
           </button>
@@ -310,7 +358,28 @@ export default function CheckoutPage() {
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                       items: validItems,
-                      addressId: selectedAddressId,
+                      addressId:
+                        useNewAddressForOrder || !addresses.find((address) => address.id === selectedAddressId)
+                          ? undefined
+                          : selectedAddressId,
+                      shippingAddress:
+                        useNewAddressForOrder || !addresses.find((address) => address.id === selectedAddressId)
+                          ? {
+                              firstName: newAddress.firstName,
+                              lastName: newAddress.lastName,
+                              addressLine1: newAddress.addressLine1,
+                              addressLine2: newAddress.addressLine2,
+                              city: newAddress.city,
+                              stateRegion: newAddress.stateRegion,
+                              postcode: newAddress.postcode,
+                              country: newAddress.country,
+                              phone: newAddress.phone,
+                            }
+                          : undefined,
+                      saveAddressForFuture:
+                        useNewAddressForOrder || !addresses.find((address) => address.id === selectedAddressId)
+                          ? saveAddressForFuture
+                          : false,
                       discountCode: discountCode.trim() || undefined,
                     }),
                   });

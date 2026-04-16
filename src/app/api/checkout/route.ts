@@ -3,6 +3,7 @@ import { getStripe } from "@/lib/stripe";
 import { CartItem } from "@/types/product";
 import {
   computeShippingForItems,
+  createUserAddress,
   getUserAddressById,
   upsertCheckoutDraft,
   validateDiscountCode,
@@ -15,6 +16,18 @@ import { applyDiscountAcrossItems } from "@/lib/checkout-pricing";
 type CheckoutRequestBody = {
   items: CartItem[];
   addressId?: string;
+  shippingAddress?: {
+    firstName?: string;
+    lastName?: string;
+    addressLine1?: string;
+    addressLine2?: string;
+    city?: string;
+    stateRegion?: string;
+    postcode?: string;
+    country?: string;
+    phone?: string;
+  };
+  saveAddressForFuture?: boolean;
   discountCode?: string;
 };
 
@@ -29,18 +42,71 @@ export async function POST(request: NextRequest) {
     if (!body.items?.length) {
       return NextResponse.json({ error: "Cart is empty." }, { status: 400 });
     }
-    if (!body.addressId) {
-      return NextResponse.json({ error: "Select a delivery address before checkout." }, { status: 400 });
-    }
-
     const stockCheck = validateCartStock(body.items);
     if (!stockCheck.ok) {
       return NextResponse.json({ error: stockCheck.message }, { status: 400 });
     }
 
-    const address = getUserAddressById(user.id, body.addressId);
+    let address = body.addressId ? getUserAddressById(user.id, body.addressId) : null;
+    if (!address && body.shippingAddress) {
+      const input = body.shippingAddress;
+      if (
+        !input.firstName?.trim() ||
+        !input.lastName?.trim() ||
+        !input.addressLine1?.trim() ||
+        !input.city?.trim() ||
+        !input.stateRegion?.trim() ||
+        !input.postcode?.trim() ||
+        !input.country?.trim()
+      ) {
+        return NextResponse.json({ error: "Please complete all required delivery fields." }, { status: 400 });
+      }
+      if (!input.phone?.trim()) {
+        return NextResponse.json({ error: "Mobile number is required for shipping." }, { status: 400 });
+      }
+      if (body.saveAddressForFuture) {
+        const updatedAddresses = createUserAddress(user.id, {
+          firstName: input.firstName,
+          lastName: input.lastName,
+          addressLine1: input.addressLine1,
+          addressLine2: input.addressLine2,
+          city: input.city,
+          stateRegion: input.stateRegion,
+          postcode: input.postcode,
+          country: input.country,
+          phone: input.phone,
+          isDefault: false,
+        });
+        address =
+          updatedAddresses.find(
+            (item) =>
+              item.firstName === input.firstName?.trim() &&
+              item.lastName === input.lastName?.trim() &&
+              item.addressLine1 === input.addressLine1?.trim() &&
+              item.postcode === input.postcode?.trim() &&
+              (item.phone ?? "") === input.phone?.trim()
+          ) ?? updatedAddresses[0] ?? null;
+      } else {
+        address = {
+          id: "temporary",
+          userId: user.id,
+          firstName: input.firstName.trim(),
+          lastName: input.lastName.trim(),
+          addressLine1: input.addressLine1.trim(),
+          addressLine2: input.addressLine2?.trim() || null,
+          city: input.city.trim(),
+          stateRegion: input.stateRegion.trim(),
+          postcode: input.postcode.trim(),
+          country: input.country.trim(),
+          phone: input.phone.trim(),
+          isDefault: false,
+          createdAt: "",
+          updatedAt: "",
+        };
+      }
+    }
     if (!address) {
-      return NextResponse.json({ error: "Selected address is invalid." }, { status: 400 });
+      return NextResponse.json({ error: "Add delivery details or select a saved address." }, { status: 400 });
     }
     if (!address.phone?.trim()) {
       return NextResponse.json(
@@ -112,7 +178,7 @@ export async function POST(request: NextRequest) {
       items: body.items,
       userId: user.id,
       customerEmail: user.email,
-      selectedAddressId: address.id,
+      selectedAddressId: body.addressId ?? null,
       shippingSnapshot: {
         firstName: address.firstName,
         lastName: address.lastName,

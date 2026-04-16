@@ -1,18 +1,98 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { CartItem } from "@/types/product";
-import { computeShippingForItems, getUserAddressById, validateCartStock, validateDiscountCode } from "@/lib/store-db";
+import {
+  computeShippingForItems,
+  createUserAddress,
+  getUserAddressById,
+  validateCartStock,
+  validateDiscountCode,
+} from "@/lib/store-db";
+
+type ShippingInput = {
+  firstName?: string;
+  lastName?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  stateRegion?: string;
+  postcode?: string;
+  country?: string;
+  phone?: string;
+};
 
 export async function POST(request: NextRequest) {
   const user = await requireUser();
   if (!user) return NextResponse.json({ error: "Login required before checkout." }, { status: 401 });
-  const body = (await request.json()) as { items: CartItem[]; addressId?: string; discountCode?: string };
+  const body = (await request.json()) as {
+    items: CartItem[];
+    addressId?: string;
+    shippingAddress?: ShippingInput;
+    saveAddressForFuture?: boolean;
+    discountCode?: string;
+  };
   if (!body.items?.length) return NextResponse.json({ error: "Cart is empty." }, { status: 400 });
-  if (!body.addressId) {
-    return NextResponse.json({ error: "Select a delivery address before checkout." }, { status: 400 });
+  let address = body.addressId ? getUserAddressById(user.id, body.addressId) : null;
+  if (!address && body.shippingAddress) {
+    const input = body.shippingAddress;
+    if (
+      !input.firstName?.trim() ||
+      !input.lastName?.trim() ||
+      !input.addressLine1?.trim() ||
+      !input.city?.trim() ||
+      !input.stateRegion?.trim() ||
+      !input.postcode?.trim() ||
+      !input.country?.trim()
+    ) {
+      return NextResponse.json({ error: "Please complete all required delivery fields." }, { status: 400 });
+    }
+    if (!input.phone?.trim()) {
+      return NextResponse.json({ error: "Mobile number is required for shipping." }, { status: 400 });
+    }
+    if (body.saveAddressForFuture) {
+      const updatedAddresses = createUserAddress(user.id, {
+        firstName: input.firstName,
+        lastName: input.lastName,
+        addressLine1: input.addressLine1,
+        addressLine2: input.addressLine2,
+        city: input.city,
+        stateRegion: input.stateRegion,
+        postcode: input.postcode,
+        country: input.country,
+        phone: input.phone,
+        isDefault: false,
+      });
+      address =
+        updatedAddresses.find(
+          (item) =>
+            item.firstName === input.firstName?.trim() &&
+            item.lastName === input.lastName?.trim() &&
+            item.addressLine1 === input.addressLine1?.trim() &&
+            item.postcode === input.postcode?.trim() &&
+            (item.phone ?? "") === input.phone?.trim()
+        ) ?? updatedAddresses[0] ?? null;
+    } else {
+      address = {
+        id: "temporary",
+        userId: user.id,
+        firstName: input.firstName.trim(),
+        lastName: input.lastName.trim(),
+        addressLine1: input.addressLine1.trim(),
+        addressLine2: input.addressLine2?.trim() || null,
+        city: input.city.trim(),
+        stateRegion: input.stateRegion.trim(),
+        postcode: input.postcode.trim(),
+        country: input.country.trim(),
+        phone: input.phone.trim(),
+        isDefault: false,
+        createdAt: "",
+        updatedAt: "",
+      };
+    }
   }
-  const address = getUserAddressById(user.id, body.addressId);
-  if (!address) return NextResponse.json({ error: "Selected address is invalid." }, { status: 400 });
+  if (!address) {
+    return NextResponse.json({ error: "Add delivery details or select a saved address." }, { status: 400 });
+  }
   if (!address.phone?.trim()) {
     return NextResponse.json(
       { error: "A mobile number is required on the selected delivery address." },
