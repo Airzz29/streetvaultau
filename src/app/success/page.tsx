@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getStripe } from "@/lib/stripe";
 import { getOrderByStripeSessionId } from "@/lib/store-db";
+import { SuccessCartClearer } from "@/components/success-cart-clearer";
 
 type SuccessPageProps = {
   searchParams: {
@@ -28,6 +29,10 @@ export default async function SuccessPage({ searchParams }: SuccessPageProps) {
 
   return (
     <section className="mx-auto max-w-2xl space-y-5 rounded-2xl border border-emerald-900/70 bg-emerald-950/25 p-5 fade-slide-up sm:p-8">
+      <SuccessCartClearer
+        shouldClear={confirmState === "ok"}
+        sessionId={searchParams.session_id}
+      />
       <p className="text-xs uppercase tracking-[0.24em] text-emerald-300">StreetVault Order Confirmed</p>
       <h1 className="text-2xl font-semibold text-emerald-300 sm:text-3xl">Payment successful</h1>
       <p className="text-sm text-zinc-300">Your order has been received and will be shipped within 1-2 business days.</p>
