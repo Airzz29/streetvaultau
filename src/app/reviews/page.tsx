@@ -2,6 +2,7 @@ import { listApprovedReviews, listProductsForCards } from "@/lib/store-db";
 import { ReviewCard } from "@/components/review-card";
 import Link from "next/link";
 import { ReviewsFilterControls } from "@/components/reviews-filter-controls";
+import { BackNavButton } from "@/components/back-nav-button";
 
 type ReviewsPageProps = {
   searchParams: {
@@ -37,6 +38,7 @@ export default function ReviewsPage({ searchParams }: ReviewsPageProps) {
 
   return (
     <section className="mx-auto w-full max-w-7xl space-y-4 pb-4">
+      <BackNavButton fallbackHref="/" label="Back" />
       <h1 className="text-3xl font-semibold">Customer Reviews</h1>
       <p className="text-sm text-zinc-400">
         Verified buyer reviews from paid StreetVault orders.

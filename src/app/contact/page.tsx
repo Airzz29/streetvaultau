@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { BackNavButton } from "@/components/back-nav-button";
 
 export default function ContactPage() {
   const [form, setForm] = useState({
@@ -34,6 +35,7 @@ export default function ContactPage() {
 
   return (
     <section className="mx-auto max-w-2xl space-y-4 rounded-2xl border border-white/10 bg-black/25 p-5 backdrop-blur-xl sm:p-7">
+      <BackNavButton fallbackHref="/" label="Back" />
       <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">StreetVault Support</p>
       <h1 className="text-3xl font-semibold">Contact Us</h1>
       <p className="text-sm text-zinc-400">

@@ -10,6 +10,7 @@ import { GlassCard } from "@/components/glass-card";
 import { ProductReview } from "@/types/review";
 import { ReviewCard } from "@/components/review-card";
 import Link from "next/link";
+import { BackNavButton } from "@/components/back-nav-button";
 
 type ProductDetailExperienceProps = {
   product: ProductWithVariants;
@@ -59,6 +60,7 @@ export function ProductDetailExperience({
 
   return (
     <section className="space-y-8 fade-slide-up sm:space-y-10">
+      <BackNavButton fallbackHref="/shop" label="Back" />
       <div className="grid gap-5 sm:gap-6 lg:grid-cols-2 lg:gap-8">
         <div className="grid gap-3">
           <GlassCard className="relative min-h-[340px] overflow-hidden sm:min-h-[460px]">

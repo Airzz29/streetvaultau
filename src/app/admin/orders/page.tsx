@@ -13,6 +13,7 @@ export default function AdminOrdersRoute() {
   const [activeGroup, setActiveGroup] = useState<FulfillmentGroup>("pending");
   const [trackingDrafts, setTrackingDrafts] = useState<Record<string, string>>({});
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [copiedOrderId, setCopiedOrderId] = useState<string | null>(null);
 
   const load = async () => {
     const response = await fetch("/api/admin/orders", { cache: "no-store", credentials: "include" });
@@ -100,6 +101,42 @@ export default function AdminOrdersRoute() {
     await load();
   };
 
+  const copyPickingSlip = async (order: Order) => {
+    const shippingLine = order.shippingAddress
+      ? `${order.shippingAddress.firstName} ${order.shippingAddress.lastName}
+${order.shippingAddress.addressLine1}${order.shippingAddress.addressLine2 ? `, ${order.shippingAddress.addressLine2}` : ""}
+${order.shippingAddress.city}, ${order.shippingAddress.stateRegion} ${order.shippingAddress.postcode}, ${order.shippingAddress.country}
+Phone: ${order.shippingAddress.phone ?? "N/A"}`
+      : "No shipping address snapshot";
+    const lines = [
+      "StreetVault Picking Slip",
+      `Order: #${order.id.slice(0, 8)} (${order.id})`,
+      `Date: ${new Date(order.createdAt).toLocaleString()}`,
+      `Customer: ${order.customerName ?? "N/A"}`,
+      `Email: ${order.customerEmail ?? "N/A"}`,
+      `Tracking: ${trackingDrafts[order.id] ?? order.trackingCode ?? "Not set"}`,
+      "",
+      "Ship To:",
+      shippingLine,
+      "",
+      "Items:",
+      ...order.items.map(
+        (item, index) =>
+          `${index + 1}. ${item.name} | Color: ${item.color || "N/A"} | Size: ${item.size || "N/A"} | Qty: ${item.quantity} | Variant: ${item.variantId}`
+      ),
+    ];
+
+    try {
+      await navigator.clipboard.writeText(lines.join("\n"));
+      setCopiedOrderId(order.id);
+      window.setTimeout(() => {
+        setCopiedOrderId((current) => (current === order.id ? null : current));
+      }, 1800);
+    } catch {
+      setCopiedOrderId(null);
+    }
+  };
+
   return (
     <section className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -142,9 +179,29 @@ export default function AdminOrdersRoute() {
               <div>
                 <p className="font-semibold">#{order.id.slice(0, 8)}</p>
                 <p className="text-sm text-zinc-400">{order.customerEmail ?? "No email"}</p>
+                <p className="text-xs text-zinc-400">
+                  {order.customerName ?? "No customer name"}
+                  {order.shippingAddress?.phone ? ` · ${order.shippingAddress.phone}` : ""}
+                </p>
                 <p className="text-xs text-zinc-500">{order.userId ? `User ${order.userId.slice(0, 8)}` : "Guest/legacy"}</p>
               </div>
-              <p className="text-sm font-semibold">{formatPriceAUD(order.revenueAUD)}</p>
+              <div className="text-right">
+                <p className="text-sm font-semibold">{formatPriceAUD(order.revenueAUD)}</p>
+                <p className="text-xs text-zinc-400">
+                  {order.items.reduce((sum, item) => sum + item.quantity, 0)} item
+                  {order.items.reduce((sum, item) => sum + item.quantity, 0) === 1 ? "" : "s"}
+                </p>
+              </div>
+            </div>
+            <div className="mt-3 rounded-xl border border-white/10 bg-black/30 p-2">
+              <p className="mb-1 text-[11px] uppercase tracking-[0.14em] text-zinc-500">Order item summary</p>
+              <div className="space-y-1">
+                {order.items.map((item, index) => (
+                  <p key={`${order.id}-${item.variantId}-${index}`} className="text-xs text-zinc-300">
+                    {item.name} · {item.color || "No color"} · {item.size || "No size"} · Qty {item.quantity}
+                  </p>
+                ))}
+              </div>
             </div>
             <div className="mt-3 grid gap-2 md:grid-cols-4">
               <input
@@ -186,13 +243,23 @@ export default function AdminOrdersRoute() {
           <div className="max-h-[90vh] w-full max-w-4xl overflow-auto rounded-2xl border border-white/15 bg-zinc-950 p-5">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-xl font-semibold">Order #{selectedOrder.id.slice(0, 8)}</h3>
-              <button type="button" onClick={() => setSelectedOrder(null)} className="rounded-md border border-white/20 px-3 py-1.5 text-xs">
-                Close
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => copyPickingSlip(selectedOrder)}
+                  className="rounded-md border border-white/20 px-3 py-1.5 text-xs hover:bg-white/10"
+                >
+                  {copiedOrderId === selectedOrder.id ? "Copied" : "Copy picking slip"}
+                </button>
+                <button type="button" onClick={() => setSelectedOrder(null)} className="rounded-md border border-white/20 px-3 py-1.5 text-xs">
+                  Close
+                </button>
+              </div>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <Info label="Customer name" value={selectedOrder.customerName ?? "N/A"} />
               <Info label="Customer email" value={selectedOrder.customerEmail ?? "N/A"} />
+              <Info label="Customer phone" value={selectedOrder.shippingAddress?.phone ?? "N/A"} />
               <Info label="Order status" value={selectedOrder.status} />
               <Info label="Payment status" value={selectedOrder.paymentStatus} />
               <Info label="Fulfillment status" value={selectedOrder.fulfillmentStatus} />
@@ -210,14 +277,29 @@ export default function AdminOrdersRoute() {
             <div className="mt-4">
               <p className="mb-2 text-sm font-semibold text-zinc-300">Purchased items</p>
               <div className="grid gap-2">
-                {selectedOrder.items.map((item) => (
-                  <div key={`${selectedOrder.id}-${item.variantId}-${item.size}`} className="flex items-center gap-3 rounded-xl border border-white/10 bg-black/30 p-2">
+                {selectedOrder.items.map((item, index) => (
+                  <div key={`${selectedOrder.id}-${item.variantId}-${index}`} className="rounded-xl border border-white/10 bg-black/30 p-2">
+                    <div className="flex items-center gap-3">
                     <div className="relative h-16 w-16 overflow-hidden rounded border border-white/10 bg-black/40">
                       <Image src={item.image} alt={item.name} fill sizes="64px" className="object-cover" />
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold text-zinc-100">{item.name}</p>
-                      <p className="text-xs text-zinc-400">Size {item.size} · Qty {item.quantity} · {formatPriceAUD(item.unitPrice)}</p>
+                      <p className="text-xs text-zinc-400">
+                        Color {item.color || "N/A"} · Size {item.size || "N/A"} · Qty {item.quantity}
+                      </p>
+                      <p className="text-xs text-zinc-500">
+                        Unit {formatPriceAUD(item.unitPrice)} · Shipping {formatPriceAUD(item.shippingRateAUD)}
+                      </p>
+                    </div>
+                    </div>
+                    <div className="mt-2 grid gap-2 text-[11px] text-zinc-500 sm:grid-cols-2">
+                      <p className="rounded-md border border-white/10 bg-black/30 px-2 py-1">
+                        Product ID: <span className="text-zinc-300">{item.productId}</span>
+                      </p>
+                      <p className="rounded-md border border-white/10 bg-black/30 px-2 py-1">
+                        Variant ID: <span className="text-zinc-300">{item.variantId}</span>
+                      </p>
                     </div>
                   </div>
                 ))}

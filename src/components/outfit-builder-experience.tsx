@@ -8,6 +8,7 @@ import { ProductWithVariants } from "@/types/product";
 import { useCart } from "@/context/cart-context";
 import { formatPriceAUD } from "@/lib/utils";
 import { GlassCard } from "@/components/glass-card";
+import { BackNavButton } from "@/components/back-nav-button";
 
 type OutfitBuilderExperienceProps = {
   products: ProductWithVariants[];
@@ -249,6 +250,7 @@ export function OutfitBuilderExperience({
 
   return (
     <section className="space-y-6">
+      <BackNavButton fallbackHref="/" label="Back" />
       <div className="space-y-2">
         <h2 className={compact ? "text-2xl font-semibold" : "text-3xl font-semibold"}>
           Outfit Builder

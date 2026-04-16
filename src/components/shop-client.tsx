@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { ProductCardData } from "@/types/product";
 import { ProductCard } from "@/components/product-card";
+import { BackNavButton } from "@/components/back-nav-button";
 
 type ShopClientProps = {
   initialProducts: ProductCardData[];
@@ -47,6 +48,7 @@ export function ShopClient({ initialProducts }: ShopClientProps) {
 
   return (
     <section className="space-y-5">
+      <BackNavButton fallbackHref="/" label="Back" />
       <div className="space-y-3">
         <h1 className="text-3xl font-semibold sm:text-4xl">Shop All</h1>
         <p className="text-zinc-400">
