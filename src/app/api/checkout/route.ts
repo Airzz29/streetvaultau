@@ -176,7 +176,7 @@ export async function POST(request: NextRequest) {
       items: body.items,
       userId: user.id,
       customerEmail: user.email,
-      selectedAddressId: body.addressId || undefined,
+      selectedAddressId: body.addressId || "manual-entry",
       shippingSnapshot: {
         firstName: address.firstName,
         lastName: address.lastName,
