@@ -6,7 +6,7 @@ export default function PantsJeansPage() {
 
   return (
     <CategoryPageContent
-      title="Pants / Jeans"
+      title="Jeans / Pants"
       subtitle="Tapered cargos and clean utility fits with modern tailoring and premium texture."
       products={products}
     />

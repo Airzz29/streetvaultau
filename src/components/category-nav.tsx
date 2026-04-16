@@ -4,10 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 export const categoryNavItems = [
-  { href: "/clothes", label: "Clothes" },
+  { href: "/clothes", label: "Shirts" },
+  { href: "/pants-jeans", label: "Jeans / Pants" },
   { href: "/shoes", label: "Shoes" },
   { href: "/hoodies", label: "Hoodies" },
-  { href: "/pants-jeans", label: "Pants / Jeans" },
   { href: "/accessories", label: "Accessories" },
   { href: "/outfit-builder", label: "Outfit Builder" },
 ];

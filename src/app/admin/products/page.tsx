@@ -9,6 +9,19 @@ function getVariantKey(color: string, size: string) {
   return `${color.trim().toLowerCase()}::${size.trim().toLowerCase()}`;
 }
 
+const categoryOptions = [
+  { value: "hoodie", label: "Hoodies" },
+  { value: "tee", label: "Shirts" },
+  { value: "pants", label: "Jeans / Pants" },
+  { value: "shoes", label: "Shoes" },
+  { value: "cap", label: "Caps" },
+  { value: "accessory", label: "Accessories" },
+];
+
+function categoryLabel(value: string) {
+  return categoryOptions.find((option) => option.value === value)?.label ?? value;
+}
+
 export default function AdminProductsRoute() {
   const [products, setProducts] = useState<ProductWithVariants[]>([]);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -336,8 +349,10 @@ export default function AdminProductsRoute() {
             </button>
           </div>
           <select value={form.category} onChange={(e) => setForm((v) => ({ ...v, category: e.target.value }))} className="min-h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm">
-            {["hoodie", "tee", "pants", "shoes", "cap", "accessory"].map((c) => (
-              <option key={c}>{c}</option>
+            {categoryOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
             ))}
           </select>
           <select value={form.outfitSlot} onChange={(e) => setForm((v) => ({ ...v, outfitSlot: e.target.value }))} className="min-h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm">
@@ -657,7 +672,7 @@ export default function AdminProductsRoute() {
                 <p className="font-semibold">{product.name}</p>
                   <p className="text-xs text-zinc-400">{product.slug}</p>
                   <p className="text-xs text-zinc-500">
-                    {product.category} {product.productType ? `· ${product.productType}` : ""} ·{" "}
+                    {categoryLabel(product.category)} {product.productType ? `· ${product.productType}` : ""} ·{" "}
                     {product.active ? "Active" : "Inactive"}
                   </p>
                 </div>

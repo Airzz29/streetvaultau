@@ -25,8 +25,9 @@ export function ShopClient({ initialProducts }: ShopClientProps) {
     let products = [...initialProducts];
 
     if (query.trim()) {
+      const normalizedQuery = query.trim().toLowerCase();
       products = products.filter((product) =>
-        product.name.toLowerCase().includes(query.trim().toLowerCase())
+        `${product.name} ${product.brand ?? ""}`.toLowerCase().includes(normalizedQuery)
       );
     }
     if (category !== "all") {
@@ -60,7 +61,7 @@ export function ShopClient({ initialProducts }: ShopClientProps) {
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search products..."
+          placeholder="Search by product or brand..."
           className="min-h-11 rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
         />
         <select
@@ -105,6 +106,22 @@ export function ShopClient({ initialProducts }: ShopClientProps) {
           <ProductCard key={product.id} product={product} />
         ))}
       </div>
+      {filteredProducts.length === 0 ? (
+        <div className="rounded-2xl border border-white/10 bg-black/25 p-6 text-center">
+          <p className="text-sm text-zinc-300">No products found.</p>
+          <button
+            type="button"
+            onClick={() => {
+              setQuery("");
+              setCategory("all");
+              setSize("all");
+            }}
+            className="mt-3 rounded-xl border border-white/20 px-4 py-2 text-sm text-zinc-100 hover:bg-white/10"
+          >
+            Clear Filters
+          </button>
+        </div>
+      ) : null}
     </section>
   );
 }

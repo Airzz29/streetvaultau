@@ -190,22 +190,23 @@ export default function CheckoutPage() {
   }
 
   return (
-    <section className="space-y-4 rounded-2xl border border-white/10 bg-black/20 p-3.5 backdrop-blur-xl sm:p-6">
+    <section className="space-y-4 rounded-2xl border border-white/10 bg-black/20 p-4 backdrop-blur-xl sm:p-6">
       <h1 className="text-2xl font-semibold sm:text-3xl">Secure Checkout</h1>
       <p className="text-sm text-zinc-400">
         Payment is embedded on-site via Stripe Checkout.
       </p>
       <div className="grid gap-4 lg:grid-cols-[1fr_1.1fr]">
-        <div className="space-y-3 rounded-2xl border border-white/10 bg-black/30 p-4">
+        <div className="space-y-4 rounded-2xl border border-white/10 bg-black/30 p-4 sm:p-5">
           <h2 className="text-lg font-semibold">Delivery address</h2>
           {addresses.length ? (
             <div className="grid gap-2">
               {addresses.map((address) => (
-                <label key={address.id} className="flex items-start gap-2 rounded-xl border border-white/10 p-2 text-sm">
+                <label key={address.id} className="flex items-start gap-2 rounded-xl border border-white/10 p-3 text-sm">
                   <input
                     type="radio"
                     checked={selectedAddressId === address.id}
                     onChange={() => setSelectedAddressId(address.id)}
+                    className="mt-1"
                   />
                   <span>
                     {address.firstName} {address.lastName}
@@ -248,29 +249,29 @@ export default function CheckoutPage() {
             <p className="text-sm text-zinc-400">No saved addresses yet. Add one below.</p>
           )}
           <div className="grid gap-2 sm:grid-cols-2">
-            <input value={newAddress.firstName} onChange={(e) => setNewAddress((v) => ({ ...v, firstName: e.target.value }))} placeholder="First name" className="min-h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm" />
-            <input value={newAddress.lastName} onChange={(e) => setNewAddress((v) => ({ ...v, lastName: e.target.value }))} placeholder="Last name" className="min-h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm" />
-            <input value={newAddress.addressLine1} onChange={(e) => setNewAddress((v) => ({ ...v, addressLine1: e.target.value }))} placeholder="Address line 1" className="min-h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm sm:col-span-2" />
-            <input value={newAddress.addressLine2} onChange={(e) => setNewAddress((v) => ({ ...v, addressLine2: e.target.value }))} placeholder="Address line 2 (optional)" className="min-h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm sm:col-span-2" />
-            <input value={newAddress.city} onChange={(e) => setNewAddress((v) => ({ ...v, city: e.target.value }))} placeholder="City" className="min-h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm" />
-            <input value={newAddress.stateRegion} onChange={(e) => setNewAddress((v) => ({ ...v, stateRegion: e.target.value }))} placeholder="State/region" className="min-h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm" />
-            <input value={newAddress.postcode} onChange={(e) => setNewAddress((v) => ({ ...v, postcode: e.target.value }))} placeholder="Postcode" className="min-h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm" />
-            <input value={newAddress.country} onChange={(e) => setNewAddress((v) => ({ ...v, country: e.target.value }))} placeholder="Country" className="min-h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm" />
-            <input value={newAddress.phone} onChange={(e) => setNewAddress((v) => ({ ...v, phone: e.target.value }))} placeholder="Mobile number (required)" className="min-h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm sm:col-span-2" />
+            <input value={newAddress.firstName} onChange={(e) => setNewAddress((v) => ({ ...v, firstName: e.target.value }))} placeholder="First name" autoComplete="given-name" className="min-h-11 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-sm" />
+            <input value={newAddress.lastName} onChange={(e) => setNewAddress((v) => ({ ...v, lastName: e.target.value }))} placeholder="Last name" autoComplete="family-name" className="min-h-11 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-sm" />
+            <input value={newAddress.addressLine1} onChange={(e) => setNewAddress((v) => ({ ...v, addressLine1: e.target.value }))} placeholder="Address line 1" autoComplete="address-line1" className="min-h-11 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-sm sm:col-span-2" />
+            <input value={newAddress.addressLine2} onChange={(e) => setNewAddress((v) => ({ ...v, addressLine2: e.target.value }))} placeholder="Address line 2 (optional)" autoComplete="address-line2" className="min-h-11 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-sm sm:col-span-2" />
+            <input value={newAddress.city} onChange={(e) => setNewAddress((v) => ({ ...v, city: e.target.value }))} placeholder="City" autoComplete="address-level2" className="min-h-11 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-sm" />
+            <input value={newAddress.stateRegion} onChange={(e) => setNewAddress((v) => ({ ...v, stateRegion: e.target.value }))} placeholder="State/region" autoComplete="address-level1" className="min-h-11 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-sm" />
+            <input value={newAddress.postcode} onChange={(e) => setNewAddress((v) => ({ ...v, postcode: e.target.value }))} placeholder="Postcode" autoComplete="postal-code" className="min-h-11 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-sm" />
+            <input value={newAddress.country} onChange={(e) => setNewAddress((v) => ({ ...v, country: e.target.value }))} placeholder="Country" autoComplete="country-name" className="min-h-11 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-sm" />
+            <input value={newAddress.phone} onChange={(e) => setNewAddress((v) => ({ ...v, phone: e.target.value }))} placeholder="Mobile number (required)" autoComplete="tel" className="min-h-11 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-sm sm:col-span-2" />
           </div>
-          <button onClick={saveAddress} className="rounded-xl border border-white/20 px-3 py-2 text-sm hover:bg-white/10">
+          <button onClick={saveAddress} className="min-h-11 w-full rounded-xl border border-white/20 px-3 py-2 text-sm hover:bg-white/10 sm:w-auto">
             Save Address
           </button>
           <div className="rounded-xl border border-white/10 p-3">
             <p className="mb-2 text-sm font-medium">Discount code</p>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               <input
                 value={discountCode}
                 onChange={(event) => setDiscountCode(event.target.value.toUpperCase())}
                 placeholder="Enter code"
-                className="min-h-10 flex-1 rounded-lg border border-white/15 bg-black/30 px-3 text-sm"
+                className="min-h-11 w-full flex-1 rounded-lg border border-white/15 bg-black/30 px-3 text-sm"
               />
-              <button onClick={prepareCheckout} className="rounded-lg bg-zinc-100 px-3 text-sm font-semibold text-zinc-900">
+              <button onClick={prepareCheckout} className="min-h-11 rounded-lg bg-zinc-100 px-3 text-sm font-semibold text-zinc-900">
                 Apply
               </button>
             </div>
@@ -291,7 +292,7 @@ export default function CheckoutPage() {
             ) : null}
           </div>
           {!readyForStripe ? (
-            <button onClick={prepareCheckout} className="w-full rounded-xl bg-zinc-100 px-4 py-3 text-sm font-semibold text-zinc-900">
+            <button onClick={prepareCheckout} className="min-h-12 w-full rounded-xl bg-zinc-100 px-4 py-3 text-sm font-semibold text-zinc-900">
               Continue to Payment
             </button>
           ) : null}
@@ -335,23 +336,23 @@ export default function CheckoutPage() {
       </div>
       {editingAddress ? (
         <div className="fixed inset-0 z-[100] grid place-items-center bg-black/70 p-4">
-          <div className="w-full max-w-xl rounded-2xl border border-white/15 bg-zinc-950 p-4">
+          <div className="w-full max-w-xl rounded-2xl border border-white/15 bg-zinc-950 p-4 sm:p-5">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-lg font-semibold">Edit delivery address</h3>
               <button onClick={() => setEditingAddress(null)} className="rounded border border-white/20 px-2 py-1 text-xs">Close</button>
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
-              <input value={editDraft.firstName} onChange={(e) => setEditDraft((v) => ({ ...v, firstName: e.target.value }))} placeholder="First name" className="min-h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm" />
-              <input value={editDraft.lastName} onChange={(e) => setEditDraft((v) => ({ ...v, lastName: e.target.value }))} placeholder="Last name" className="min-h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm" />
-              <input value={editDraft.addressLine1} onChange={(e) => setEditDraft((v) => ({ ...v, addressLine1: e.target.value }))} placeholder="Address line 1" className="min-h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm sm:col-span-2" />
-              <input value={editDraft.addressLine2} onChange={(e) => setEditDraft((v) => ({ ...v, addressLine2: e.target.value }))} placeholder="Address line 2" className="min-h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm sm:col-span-2" />
-              <input value={editDraft.city} onChange={(e) => setEditDraft((v) => ({ ...v, city: e.target.value }))} placeholder="City" className="min-h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm" />
-              <input value={editDraft.stateRegion} onChange={(e) => setEditDraft((v) => ({ ...v, stateRegion: e.target.value }))} placeholder="State/region" className="min-h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm" />
-              <input value={editDraft.postcode} onChange={(e) => setEditDraft((v) => ({ ...v, postcode: e.target.value }))} placeholder="Postcode" className="min-h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm" />
-              <input value={editDraft.country} onChange={(e) => setEditDraft((v) => ({ ...v, country: e.target.value }))} placeholder="Country" className="min-h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm" />
-              <input value={editDraft.phone} onChange={(e) => setEditDraft((v) => ({ ...v, phone: e.target.value }))} placeholder="Mobile number (required)" className="min-h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm sm:col-span-2" />
+              <input value={editDraft.firstName} onChange={(e) => setEditDraft((v) => ({ ...v, firstName: e.target.value }))} placeholder="First name" autoComplete="given-name" className="min-h-11 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-sm" />
+              <input value={editDraft.lastName} onChange={(e) => setEditDraft((v) => ({ ...v, lastName: e.target.value }))} placeholder="Last name" autoComplete="family-name" className="min-h-11 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-sm" />
+              <input value={editDraft.addressLine1} onChange={(e) => setEditDraft((v) => ({ ...v, addressLine1: e.target.value }))} placeholder="Address line 1" autoComplete="address-line1" className="min-h-11 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-sm sm:col-span-2" />
+              <input value={editDraft.addressLine2} onChange={(e) => setEditDraft((v) => ({ ...v, addressLine2: e.target.value }))} placeholder="Address line 2" autoComplete="address-line2" className="min-h-11 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-sm sm:col-span-2" />
+              <input value={editDraft.city} onChange={(e) => setEditDraft((v) => ({ ...v, city: e.target.value }))} placeholder="City" autoComplete="address-level2" className="min-h-11 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-sm" />
+              <input value={editDraft.stateRegion} onChange={(e) => setEditDraft((v) => ({ ...v, stateRegion: e.target.value }))} placeholder="State/region" autoComplete="address-level1" className="min-h-11 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-sm" />
+              <input value={editDraft.postcode} onChange={(e) => setEditDraft((v) => ({ ...v, postcode: e.target.value }))} placeholder="Postcode" autoComplete="postal-code" className="min-h-11 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-sm" />
+              <input value={editDraft.country} onChange={(e) => setEditDraft((v) => ({ ...v, country: e.target.value }))} placeholder="Country" autoComplete="country-name" className="min-h-11 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-sm" />
+              <input value={editDraft.phone} onChange={(e) => setEditDraft((v) => ({ ...v, phone: e.target.value }))} placeholder="Mobile number (required)" autoComplete="tel" className="min-h-11 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-sm sm:col-span-2" />
             </div>
-            <button onClick={saveEditedAddress} className="mt-3 rounded-xl bg-zinc-100 px-4 py-2 text-sm font-semibold text-zinc-900">
+            <button onClick={saveEditedAddress} className="mt-3 min-h-11 w-full rounded-xl bg-zinc-100 px-4 py-2 text-sm font-semibold text-zinc-900 sm:w-auto">
               Save changes
             </button>
           </div>
