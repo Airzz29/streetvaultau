@@ -1813,6 +1813,12 @@ export function promoteUserToAdminByEmail(email: string) {
   return getUserByEmail(normalizedEmail);
 }
 
+export function setUserRole(userId: string, role: "customer" | "admin") {
+  const now = nowISO();
+  db.prepare("UPDATE users SET role=?, updated_at=? WHERE id=?").run(role, now, userId);
+  return getUserById(userId);
+}
+
 export function listAdminUsers() {
   const rows = db
     .prepare("SELECT * FROM users WHERE role='admin' ORDER BY created_at DESC")

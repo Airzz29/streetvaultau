@@ -34,7 +34,14 @@ export default async function RootLayout({
   try {
     user = await requireUser();
   } catch (error) {
-    console.error("Failed to resolve user session in RootLayout", error);
+    const description =
+      error && typeof error === "object" && "description" in error
+        ? String((error as { description?: unknown }).description ?? "")
+        : "";
+    const isExpectedDynamicUsage = description.includes("DYNAMIC_SERVER_USAGE");
+    if (!isExpectedDynamicUsage) {
+      console.error("Failed to resolve user session in RootLayout", error);
+    }
     user = null;
   }
 

@@ -9,6 +9,7 @@ import {
   listAdminUsers,
   listPendingAdminInvites,
   promoteUserToAdminByEmail,
+  setUserRole,
   updateStoreSettings,
 } from "@/lib/store-db";
 import { requireAdmin } from "@/lib/auth";
@@ -18,6 +19,7 @@ export async function GET() {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   return NextResponse.json({
+    currentAdminId: admin.id,
     ...getStoreSettings(),
     admins: listAdminUsers().map((user) => ({
       id: user.id,
@@ -107,5 +109,30 @@ export async function POST(request: NextRequest) {
     ok: true,
     mode: "invited_new_admin",
     message: "Admin invitation sent.",
+  });
+}
+
+type RemoveAdminBody = { userId?: string };
+
+export async function DELETE(request: NextRequest) {
+  const admin = await requireAdmin();
+  if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const body = (await request.json()) as RemoveAdminBody;
+  const targetUserId = body.userId?.trim() ?? "";
+  if (!targetUserId) {
+    return NextResponse.json({ error: "Missing user id." }, { status: 400 });
+  }
+  if (targetUserId === admin.id) {
+    return NextResponse.json({ error: "You cannot remove your own admin access." }, { status: 400 });
+  }
+
+  const updated = setUserRole(targetUserId, "customer");
+  if (!updated) {
+    return NextResponse.json({ error: "Admin user not found." }, { status: 404 });
+  }
+  return NextResponse.json({
+    ok: true,
+    message: "Admin access removed.",
   });
 }

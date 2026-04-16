@@ -21,6 +21,7 @@ type PendingAdminInvite = {
 export default function AdminSettingsRoute() {
   const [lowStockThreshold, setLowStockThreshold] = useState(3);
   const [shippingFlatRate, setShippingFlatRate] = useState(10);
+  const [currentAdminId, setCurrentAdminId] = useState("");
   const [adminEmail, setAdminEmail] = useState("");
   const [admins, setAdmins] = useState<AdminUser[]>([]);
   const [pendingInvites, setPendingInvites] = useState<PendingAdminInvite[]>([]);
@@ -35,6 +36,7 @@ export default function AdminSettingsRoute() {
       .then((data) => {
         setLowStockThreshold(data.lowStockThreshold ?? 3);
         setShippingFlatRate(data.shippingFlatRate ?? 10);
+        setCurrentAdminId(data.currentAdminId ?? "");
         setAdmins(data.admins ?? []);
         setPendingInvites(data.pendingAdminInvites ?? []);
       });
@@ -80,6 +82,24 @@ export default function AdminSettingsRoute() {
     } finally {
       setPromoting(false);
     }
+  };
+
+  const onRemoveAdmin = async (userId: string) => {
+    setAdminMessage("");
+    setAdminError("");
+    const response = await fetch("/api/admin/settings", {
+      method: "DELETE",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      setAdminError(data.error ?? "Unable to remove admin access.");
+      return;
+    }
+    setAdminMessage(data.message ?? "Admin access removed.");
+    loadSettings();
   };
 
   return (
@@ -141,10 +161,27 @@ export default function AdminSettingsRoute() {
               {admins.length ? (
                 admins.map((admin) => (
                   <div key={admin.id} className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm">
-                    <p className="font-medium text-zinc-100">
-                      {admin.firstName} {admin.lastName}
-                    </p>
-                    <p className="text-zinc-400">{admin.email}</p>
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="font-medium text-zinc-100">
+                          {admin.firstName} {admin.lastName}
+                        </p>
+                        <p className="text-zinc-400">{admin.email}</p>
+                      </div>
+                      {admin.id !== currentAdminId ? (
+                        <button
+                          type="button"
+                          onClick={() => onRemoveAdmin(admin.id)}
+                          className="rounded-md border border-red-400/30 px-2 py-1 text-xs text-red-200 hover:bg-red-500/10"
+                        >
+                          Remove admin
+                        </button>
+                      ) : (
+                        <span className="rounded-md border border-white/15 px-2 py-1 text-xs text-zinc-400">
+                          You
+                        </span>
+                      )}
+                    </div>
                   </div>
                 ))
               ) : (
