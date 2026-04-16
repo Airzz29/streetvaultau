@@ -1332,6 +1332,13 @@ export function getOrderById(orderId: string) {
   return result[0] ?? null;
 }
 
+export function getOrderByStripeSessionId(stripeSessionId: string) {
+  const normalized = stripeSessionId.trim();
+  if (!normalized) return null;
+  const result = queryOrders("stripe_session_id = ?", [normalized]);
+  return result[0] ?? null;
+}
+
 export function createPaidOrderFromStripeSession(
   stripeSessionId: string,
   input: { paid: boolean; customerEmail: string | null; customerName: string | null }

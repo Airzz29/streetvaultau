@@ -62,7 +62,7 @@ export default async function AccountOrdersPage() {
                   href={`https://auspost.com.au/mypost/track/details/${encodeURIComponent(order.trackingCode)}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="mt-2 inline-flex rounded-lg bg-zinc-100 px-3 py-1.5 text-xs font-semibold text-zinc-900"
+                  className="mt-2 inline-flex min-h-10 items-center rounded-xl bg-zinc-100 px-4 py-2 text-sm font-semibold text-zinc-900"
                 >
                   Track
                 </a>
@@ -100,7 +100,7 @@ export default async function AccountOrdersPage() {
                       ) : (
                         <Link
                           href={`/account/reviews?orderItemId=${encodeURIComponent(item.orderItemId)}`}
-                          className="mt-1 inline-flex rounded border border-white/20 px-2 py-1 text-[11px] text-zinc-200 hover:bg-white/10"
+                          className="mt-2 inline-flex min-h-9 items-center rounded-lg border border-white/25 bg-white/5 px-3 py-1.5 text-xs font-semibold text-zinc-100 hover:bg-white/10"
                         >
                           Leave Review
                         </Link>

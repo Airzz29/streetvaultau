@@ -12,6 +12,7 @@ import {
 import { buildStripeProductData } from "@/lib/stripe-checkout-images";
 import { requireUser } from "@/lib/auth";
 import { applyDiscountAcrossItems } from "@/lib/checkout-pricing";
+import { resolveAppBaseUrl } from "@/lib/app-url";
 
 type EmbeddedCheckoutRequestBody = {
   items: CartItem[];
@@ -130,7 +131,7 @@ export async function POST(request: NextRequest) {
     }
     const discountedItems = applyDiscountAcrossItems(body.items, discountAmountAUD);
 
-    const origin = request.nextUrl.origin;
+    const origin = resolveAppBaseUrl(request);
     const lineItems = discountedItems.map((cartItem) => ({
       quantity: cartItem.quantity,
       price_data: {
