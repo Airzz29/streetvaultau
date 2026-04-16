@@ -1,9 +1,13 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { BackNavButton } from "@/components/back-nav-button";
 
 export default function ContactPage() {
+  const [orderContext, setOrderContext] = useState<{ orderId: string; product: string }>({
+    orderId: "",
+    product: "",
+  });
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -14,6 +18,23 @@ export default function ContactPage() {
   const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
   const [error, setError] = useState("");
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const orderId = params.get("orderId") ?? "";
+    const product = params.get("product") ?? "";
+    if (!orderId) return;
+    setOrderContext({ orderId, product });
+    setForm((prev) => ({
+      ...prev,
+      subject: prev.subject || `Order support ${orderId}`,
+      message:
+        prev.message ||
+        `Hi StreetVault team, I need help with order #${orderId.slice(0, 8)}${
+          product ? ` regarding ${product}` : ""
+        }.`,
+    }));
+  }, []);
+
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setStatus("idle");
@@ -21,7 +42,11 @@ export default function ContactPage() {
     const response = await fetch("/api/contact", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
+      body: JSON.stringify({
+        ...form,
+        sourceType: orderContext.orderId ? "order" : "general",
+        orderId: orderContext.orderId || undefined,
+      }),
     });
     const data = await response.json();
     if (!response.ok) {

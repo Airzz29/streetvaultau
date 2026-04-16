@@ -93,18 +93,26 @@ export default async function AccountOrdersPage() {
                       Size {item.size} - {formatPriceAUD(item.unitPrice)} each
                     </p>
                     {item.orderItemId && order.paymentStatus === "paid" ? (
-                      reviewableByOrderItemId.get(item.orderItemId) ? (
-                        <span className="mt-1 inline-flex rounded border border-emerald-400/40 px-2 py-1 text-[11px] text-emerald-200">
-                          Reviewed
-                        </span>
-                      ) : (
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        {reviewableByOrderItemId.get(item.orderItemId) ? (
+                          <span className="inline-flex rounded border border-emerald-400/40 px-2 py-1 text-[11px] text-emerald-200">
+                            Reviewed
+                          </span>
+                        ) : (
+                          <Link
+                            href={`/account/reviews?orderItemId=${encodeURIComponent(item.orderItemId)}`}
+                            className="inline-flex min-h-9 items-center rounded-lg border border-white/25 bg-white/5 px-3 py-1.5 text-xs font-semibold text-zinc-100 hover:bg-white/10"
+                          >
+                            Leave a Good Review
+                          </Link>
+                        )}
                         <Link
-                          href={`/account/reviews?orderItemId=${encodeURIComponent(item.orderItemId)}`}
-                          className="mt-2 inline-flex min-h-9 items-center rounded-lg border border-white/25 bg-white/5 px-3 py-1.5 text-xs font-semibold text-zinc-100 hover:bg-white/10"
+                          href={`/contact?orderId=${encodeURIComponent(order.id)}&product=${encodeURIComponent(item.name)}`}
+                          className="inline-flex min-h-9 items-center rounded-lg border border-amber-300/40 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-100 hover:bg-amber-500/20"
                         >
-                          Leave Review
+                          Contact Us
                         </Link>
-                      )
+                      </div>
                     ) : null}
                   </div>
                 </div>

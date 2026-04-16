@@ -302,6 +302,8 @@ function init() {
       subject TEXT,
       message TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'unfinished',
+      source_type TEXT NOT NULL DEFAULT 'general',
+      order_id TEXT,
       internal_note TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
@@ -398,6 +400,8 @@ function init() {
   addColumnIfMissing("discount_codes", "starts_at TEXT", "starts_at");
   addColumnIfMissing("users", "phone TEXT", "phone");
   addColumnIfMissing("users", "last_active_at TEXT", "last_active_at");
+  addColumnIfMissing("contact_messages", "source_type TEXT NOT NULL DEFAULT 'general'", "source_type");
+  addColumnIfMissing("contact_messages", "order_id TEXT", "order_id");
 
   db.prepare(
     `INSERT OR IGNORE INTO store_settings (id, low_stock_threshold, shipping_flat_rate) VALUES ('default', 3, 10)`
@@ -2383,12 +2387,16 @@ export function createContactMessage(input: {
   phone?: string | null;
   subject?: string | null;
   message: string;
+  sourceType?: "general" | "order";
+  orderId?: string | null;
 }) {
   const now = nowISO();
   const id = crypto.randomUUID();
+  const sourceType = input.sourceType ?? "general";
+  const initialStatus = sourceType === "order" ? "priority" : "unfinished";
   db.prepare(
-    `INSERT INTO contact_messages (id,name,email,phone,subject,message,status,internal_note,created_at,updated_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?)`
+    `INSERT INTO contact_messages (id,name,email,phone,subject,message,status,source_type,order_id,internal_note,created_at,updated_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`
   ).run(
     id,
     input.name.trim(),
@@ -2396,7 +2404,9 @@ export function createContactMessage(input: {
     input.phone?.trim() || null,
     input.subject?.trim() || null,
     input.message.trim(),
-    "unfinished",
+    initialStatus,
+    sourceType,
+    input.orderId?.trim() || null,
     null,
     now,
     now
@@ -2404,7 +2414,7 @@ export function createContactMessage(input: {
   return id;
 }
 
-export function listContactMessages(status?: "unfinished" | "finished") {
+export function listContactMessages(status?: "unfinished" | "priority" | "finished") {
   const rows = status
     ? (db
         .prepare("SELECT * FROM contact_messages WHERE status=? ORDER BY created_at DESC")
@@ -2415,7 +2425,9 @@ export function listContactMessages(status?: "unfinished" | "finished") {
         phone: string | null;
         subject: string | null;
         message: string;
-        status: "unfinished" | "finished";
+        status: "unfinished" | "priority" | "finished";
+        source_type: "general" | "order";
+        order_id: string | null;
         internal_note: string | null;
         created_at: string;
         updated_at: string;
@@ -2429,7 +2441,9 @@ export function listContactMessages(status?: "unfinished" | "finished") {
         phone: string | null;
         subject: string | null;
         message: string;
-        status: "unfinished" | "finished";
+        status: "unfinished" | "priority" | "finished";
+        source_type: "general" | "order";
+        order_id: string | null;
         internal_note: string | null;
         created_at: string;
         updated_at: string;
@@ -2442,6 +2456,8 @@ export function listContactMessages(status?: "unfinished" | "finished") {
     subject: row.subject,
     message: row.message,
     status: row.status,
+    sourceType: row.source_type,
+    orderId: row.order_id,
     internalNote: row.internal_note,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -2450,7 +2466,7 @@ export function listContactMessages(status?: "unfinished" | "finished") {
 
 export function updateContactMessage(
   id: string,
-  input: { status?: "unfinished" | "finished"; internalNote?: string | null }
+  input: { status?: "unfinished" | "priority" | "finished"; internalNote?: string | null }
 ) {
   db.prepare(
     `UPDATE contact_messages
