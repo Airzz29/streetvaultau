@@ -71,6 +71,16 @@ type DbUserRow = {
   updated_at: string;
 };
 
+type DbAdminInviteRow = {
+  id: string;
+  email: string;
+  token_hash: string;
+  invited_by_user_id: string | null;
+  expires_at: string;
+  accepted_at: string | null;
+  created_at: string;
+};
+
 const dbDir = path.join(process.cwd(), "data");
 const dbPath = path.join(dbDir, "store.db");
 
@@ -329,6 +339,17 @@ function init() {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS admin_invites (
+      id TEXT PRIMARY KEY,
+      email TEXT NOT NULL,
+      token_hash TEXT NOT NULL UNIQUE,
+      invited_by_user_id TEXT,
+      expires_at TEXT NOT NULL,
+      accepted_at TEXT,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (invited_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+    );
   `);
 
   addColumnIfMissing("products", "brand TEXT", "brand");
@@ -399,6 +420,7 @@ function init() {
     CREATE INDEX IF NOT EXISTS idx_product_reviews_user_id_created ON product_reviews(user_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_product_reviews_status_created ON product_reviews(status, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_pending_email_expires ON pending_email_verifications(expires_at);
+    CREATE INDEX IF NOT EXISTS idx_admin_invites_email_expires ON admin_invites(email, expires_at DESC);
   `);
   const seeded = db
     .prepare("SELECT value FROM app_meta WHERE key='seeded_products_v1'")
@@ -1783,6 +1805,94 @@ export function countAdminUsers() {
   return row.count;
 }
 
+export function promoteUserToAdminByEmail(email: string) {
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!normalizedEmail) return null;
+  const now = nowISO();
+  db.prepare("UPDATE users SET role='admin', updated_at=? WHERE LOWER(email)=?").run(now, normalizedEmail);
+  return getUserByEmail(normalizedEmail);
+}
+
+export function listAdminUsers() {
+  const rows = db
+    .prepare("SELECT * FROM users WHERE role='admin' ORDER BY created_at DESC")
+    .all() as DbUserRow[];
+  return rows.map(mapUser);
+}
+
+export function getActiveAdminInviteByEmail(email: string) {
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!normalizedEmail) return null;
+  const row = db
+    .prepare(
+      `SELECT id,email,token_hash,invited_by_user_id,expires_at,accepted_at,created_at
+       FROM admin_invites
+       WHERE email=? AND accepted_at IS NULL
+       ORDER BY created_at DESC
+       LIMIT 1`
+    )
+    .get(normalizedEmail) as DbAdminInviteRow | undefined;
+  if (!row) return null;
+  if (new Date(row.expires_at).getTime() < Date.now()) return null;
+  return {
+    id: row.id,
+    email: row.email,
+    expiresAt: row.expires_at,
+    invitedByUserId: row.invited_by_user_id,
+    createdAt: row.created_at,
+  };
+}
+
+export function createAdminInvite(input: {
+  email: string;
+  tokenHash: string;
+  expiresAt: string;
+  invitedByUserId?: string | null;
+}) {
+  const normalizedEmail = input.email.trim().toLowerCase();
+  const now = nowISO();
+  db.prepare(
+    `INSERT INTO admin_invites (id,email,token_hash,invited_by_user_id,expires_at,accepted_at,created_at)
+     VALUES (?,?,?,?,?,?,?)`
+  ).run(
+    crypto.randomUUID(),
+    normalizedEmail,
+    input.tokenHash,
+    input.invitedByUserId ?? null,
+    input.expiresAt,
+    null,
+    now
+  );
+  return getActiveAdminInviteByEmail(normalizedEmail);
+}
+
+export function listPendingAdminInvites() {
+  const rows = db
+    .prepare(
+      `SELECT id,email,token_hash,invited_by_user_id,expires_at,accepted_at,created_at
+       FROM admin_invites
+       WHERE accepted_at IS NULL
+       ORDER BY created_at DESC`
+    )
+    .all() as DbAdminInviteRow[];
+  const now = Date.now();
+  return rows
+    .filter((row) => new Date(row.expires_at).getTime() >= now)
+    .map((row) => ({
+      id: row.id,
+      email: row.email,
+      expiresAt: row.expires_at,
+      invitedByUserId: row.invited_by_user_id,
+      createdAt: row.created_at,
+    }));
+}
+
+export function deletePendingAdminInvitesByEmail(email: string) {
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!normalizedEmail) return;
+  db.prepare("DELETE FROM admin_invites WHERE email=? AND accepted_at IS NULL").run(normalizedEmail);
+}
+
 export function setUserPasswordHash(userId: string, passwordHash: string) {
   db.prepare("UPDATE users SET password_hash=?, updated_at=? WHERE id=?").run(passwordHash, nowISO(), userId);
 }
@@ -1924,6 +2034,36 @@ export function consumePasswordResetToken(tokenHash: string) {
   if (new Date(row.expires_at).getTime() < Date.now()) return null;
   db.prepare("UPDATE password_reset_tokens SET used_at=? WHERE id=?").run(now, row.id);
   return { userId: row.user_id };
+}
+
+export function getAdminInviteByTokenHash(tokenHash: string) {
+  const row = db
+    .prepare(
+      `SELECT id,email,token_hash,invited_by_user_id,expires_at,accepted_at,created_at
+       FROM admin_invites
+       WHERE token_hash=?
+       ORDER BY created_at DESC
+       LIMIT 1`
+    )
+    .get(tokenHash) as DbAdminInviteRow | undefined;
+  if (!row) return null;
+  const isExpired = new Date(row.expires_at).getTime() < Date.now();
+  return {
+    id: row.id,
+    email: row.email,
+    expiresAt: row.expires_at,
+    invitedByUserId: row.invited_by_user_id,
+    createdAt: row.created_at,
+    acceptedAt: row.accepted_at,
+    isExpired,
+  };
+}
+
+export function markAdminInviteAccepted(inviteId: string) {
+  db.prepare("UPDATE admin_invites SET accepted_at=? WHERE id=? AND accepted_at IS NULL").run(
+    nowISO(),
+    inviteId
+  );
 }
 
 export function listUserAddresses(userId: string) {

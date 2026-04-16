@@ -279,3 +279,34 @@ export async function sendEmailVerificationCodeEmail(params: {
   return { sent: true };
 }
 
+export async function sendAdminInviteEmail(params: {
+  to: string;
+  inviteUrl: string;
+  expiresHours: number;
+}) {
+  const transport = getTransport();
+  const from = process.env.EMAIL_FROM ?? process.env.EMAIL_SMTP_USER;
+  if (!transport || !from) return { sent: false };
+  await transport.sendMail({
+    from,
+    to: params.to,
+    subject: "You have been invited as a StreetVault admin",
+    html: wrapBrandEmail({
+      title: "Admin invitation",
+      subtitle: "You have been invited to access the StreetVault admin panel.",
+      bodyHtml: `
+        <p style="margin:0 0 12px;color:#e4e4e7;font-size:14px;line-height:1.7;">
+          Click the secure link below to create your admin password and activate your admin account.
+        </p>
+        <p style="margin:0;color:#d4d4d8;font-size:14px;line-height:1.7;">
+          This link expires in <strong>${params.expiresHours} hours</strong> and can only be used once.
+        </p>
+      `,
+      ctaLabel: "Set Admin Password",
+      ctaUrl: params.inviteUrl,
+      fallbackText: "If the button does not work, use this secure link:",
+    }),
+  });
+  return { sent: true };
+}
+
