@@ -100,8 +100,6 @@ export async function POST(request: NextRequest) {
           country: input.country.trim(),
           phone: input.phone.trim(),
           isDefault: false,
-          createdAt: "",
-          updatedAt: "",
         };
       }
     }
