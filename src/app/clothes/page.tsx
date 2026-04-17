@@ -1,5 +1,12 @@
+import type { Metadata } from "next";
 import { CategoryPageContent } from "@/components/category-page-content";
 import { listProductsForCards } from "@/lib/store-db";
+
+export const metadata: Metadata = {
+  title: "Shirts Australia | StreetVault",
+  description: "Shop premium streetwear shirts in Australia from StreetVault.",
+  alternates: { canonical: "/clothes" },
+};
 
 export default function ClothesPage() {
   const products = listProductsForCards().filter((product) => product.category === "tee");

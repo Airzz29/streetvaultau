@@ -1,11 +1,28 @@
+import type { Metadata } from "next";
 import Link from "next/link";
-import { listProductsForCards, listProductsWithVariants } from "@/lib/store-db";
+import { listPremadeFitCards, listProductsForCards, listProductsWithVariants } from "@/lib/store-db";
 import { ProductCard } from "@/components/product-card";
 import { OutfitBuilderExperience } from "@/components/outfit-builder-experience";
 import { GlassCard } from "@/components/glass-card";
 import { CategoryNav } from "@/components/category-nav";
 import { listApprovedReviews } from "@/lib/store-db";
 import { ReviewCard } from "@/components/review-card";
+import { PremadeFitCardView } from "@/components/premade-fit-card";
+
+export const metadata: Metadata = {
+  title: "Streetwear Australia | Premium Fits | StreetVault",
+  description:
+    "StreetVault is a premium streetwear store in Australia for hoodies, cargos, shoes, and premade outfit bundles.",
+  alternates: { canonical: "/" },
+  keywords: [
+    "streetwear australia",
+    "hoodies australia",
+    "cargo pants australia",
+    "premium streetwear bundles",
+    "outfit bundles australia",
+    "chrome style streetwear",
+  ],
+};
 
 export default function Home() {
   const products = listProductsForCards();
@@ -15,6 +32,7 @@ export default function Home() {
     (item) => !bestSellerPool.some((bestSeller) => bestSeller.id === item.id)
   );
   const topSellers = [...bestSellerPool, ...fallbackPool].slice(0, 6);
+  const featuredFits = listPremadeFitCards().slice(0, 3);
   const latestReviews = listApprovedReviews(5);
 
   return (
@@ -65,6 +83,26 @@ export default function Home() {
             <ProductCard key={product.id} product={product} />
           ))}
         </div>
+      </section>
+
+      <section className="space-y-4 fade-slide-up">
+        <div className="flex items-end justify-between">
+          <h2 className="text-2xl font-semibold sm:text-3xl">Premade Fits</h2>
+          <Link href="/premade-fits" className="text-sm text-zinc-300 hover:text-zinc-100">
+            View all fits
+          </Link>
+        </div>
+        {featuredFits.length ? (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {featuredFits.map((fit) => (
+              <PremadeFitCardView key={fit.id} fit={fit} />
+            ))}
+          </div>
+        ) : (
+          <p className="rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-zinc-400">
+            Premade fits are coming soon.
+          </p>
+        )}
       </section>
 
       <section className="space-y-4 fade-slide-up">

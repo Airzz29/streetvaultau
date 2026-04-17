@@ -9,6 +9,7 @@ export const categoryNavItems = [
   { href: "/shoes", label: "Shoes" },
   { href: "/hoodies", label: "Hoodies" },
   { href: "/accessories", label: "Accessories" },
+  { href: "/premade-fits", label: "Premade Fits" },
   { href: "/outfit-builder", label: "Outfit Builder" },
 ];
 

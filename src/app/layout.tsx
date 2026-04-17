@@ -7,6 +7,7 @@ import { Footer } from "@/components/footer";
 import { SiteBackground } from "@/components/site-background";
 import { CartAddToast } from "@/components/cart-add-toast";
 import { requireUser } from "@/lib/auth";
+import { resolveAppBaseUrl } from "@/lib/app-url";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -23,6 +24,22 @@ export const metadata: Metadata = {
   title: "StreetVault | Premium Streetwear",
   description:
     "StreetVault brings best quality clothes and shoes with 1-3 day express shipping in Australia only.",
+  metadataBase: new URL(resolveAppBaseUrl()),
+  alternates: { canonical: "/" },
+  openGraph: {
+    title: "StreetVault | Premium Streetwear",
+    description:
+      "StreetVault brings best quality clothes and shoes with 1-3 day express shipping in Australia only.",
+    url: "/",
+    siteName: "StreetVault",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "StreetVault | Premium Streetwear",
+    description:
+      "StreetVault brings best quality clothes and shoes with 1-3 day express shipping in Australia only.",
+  },
 };
 
 export default async function RootLayout({
@@ -31,6 +48,32 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   let user = null;
+  const appBaseUrl = resolveAppBaseUrl();
+  const organizationSchema = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: "StreetVault",
+    url: appBaseUrl,
+    logo: `${appBaseUrl}/favicon.ico`,
+    sameAs: [
+      "https://instagram.com/streetvault",
+      "https://x.com/streetvault",
+      "https://facebook.com/streetvault",
+      "https://youtube.com/@streetvault",
+      "https://linkedin.com/company/streetvault",
+    ],
+  };
+  const websiteSchema = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: "StreetVault",
+    url: appBaseUrl,
+    potentialAction: {
+      "@type": "SearchAction",
+      target: `${appBaseUrl}/shop?query={search_term_string}`,
+      "query-input": "required name=search_term_string",
+    },
+  };
   try {
     user = await requireUser();
   } catch (error) {
@@ -50,6 +93,14 @@ export default async function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} relative bg-transparent text-zinc-100 antialiased`}
       >
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }}
+        />
         <CartProvider>
           <SiteBackground />
           <div className="relative z-[20] flex min-h-screen flex-col">

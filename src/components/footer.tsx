@@ -32,6 +32,18 @@ export function Footer() {
           >
             Instagram
           </a>
+          <a href="https://x.com/streetvault" target="_blank" rel="noreferrer" className="text-zinc-300 hover:text-zinc-100">
+            X / Twitter
+          </a>
+          <a href="https://facebook.com/streetvault" target="_blank" rel="noreferrer" className="text-zinc-300 hover:text-zinc-100">
+            Facebook
+          </a>
+          <a href="https://youtube.com/@streetvault" target="_blank" rel="noreferrer" className="text-zinc-300 hover:text-zinc-100">
+            YouTube
+          </a>
+          <a href="https://linkedin.com/company/streetvault" target="_blank" rel="noreferrer" className="text-zinc-300 hover:text-zinc-100">
+            LinkedIn
+          </a>
         </div>
         <p className="text-right text-xs sm:text-sm">1-3 day express shipping (Australia only)</p>
       </div>
