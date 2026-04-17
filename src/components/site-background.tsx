@@ -49,10 +49,10 @@ export function SiteBackground() {
             idleId
           );
       }
-      const timeoutId = window.setTimeout(() => {
+      const timeoutId = globalThis.setTimeout(() => {
         void attemptPlayback();
       }, 180);
-      return () => window.clearTimeout(timeoutId);
+      return () => globalThis.clearTimeout(timeoutId);
     };
     const cleanup = schedule();
     return () => {
