@@ -84,6 +84,8 @@ export type ProductCardData = {
 
 export type CartItem = {
   orderItemId?: string;
+  bundleId?: string;
+  bundleName?: string;
   productId: string;
   variantId: string;
   size: string;

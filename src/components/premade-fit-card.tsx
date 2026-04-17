@@ -11,13 +11,13 @@ export function PremadeFitCardView({ fit }: { fit: PremadeFitCard }) {
       href={`/premade-fits/${fit.slug}`}
       className="group overflow-hidden rounded-2xl border border-white/10 bg-black/25 transition hover:border-white/25"
     >
-      <div className="relative h-56 w-full overflow-hidden bg-black/30">
+      <div className="relative mx-auto aspect-square w-full max-w-[500px] overflow-hidden bg-black/30">
         <Image
           src={fit.image}
           alt={fit.name}
           fill
-          sizes="(max-width: 1024px) 100vw, 33vw"
-          className="object-contain p-3 transition duration-300 group-hover:scale-[1.03]"
+          sizes="(max-width: 640px) 90vw, (max-width: 1200px) 45vw, 500px"
+          className="object-contain p-4 transition duration-300 group-hover:scale-[1.02]"
         />
       </div>
       <div className="space-y-2 p-4">

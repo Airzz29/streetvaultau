@@ -319,6 +319,8 @@ function init() {
     CREATE TABLE IF NOT EXISTS user_cart_items (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
+      bundle_id TEXT,
+      bundle_name TEXT,
       product_id TEXT NOT NULL,
       variant_id TEXT NOT NULL,
       size TEXT NOT NULL,
@@ -487,6 +489,8 @@ function init() {
   addColumnIfMissing("users", "last_active_at TEXT", "last_active_at");
   addColumnIfMissing("contact_messages", "source_type TEXT NOT NULL DEFAULT 'general'", "source_type");
   addColumnIfMissing("contact_messages", "order_id TEXT", "order_id");
+  addColumnIfMissing("user_cart_items", "bundle_id TEXT", "bundle_id");
+  addColumnIfMissing("user_cart_items", "bundle_name TEXT", "bundle_name");
   addColumnIfMissing("premade_fit_items", "slot TEXT NOT NULL DEFAULT 'top'", "slot");
   addColumnIfMissing("premade_fit_items", "is_optional INTEGER NOT NULL DEFAULT 0", "is_optional");
   addColumnIfMissing("premade_fit_items", "item_main_image TEXT", "item_main_image");
@@ -2678,12 +2682,14 @@ export function updateUserAddress(
 export function listUserCartItems(userId: string): CartItem[] {
   const rows = db
     .prepare(
-      `SELECT product_id, variant_id, size, color, name, image, unit_price, shipping_rate_aud, quantity
+      `SELECT bundle_id, bundle_name, product_id, variant_id, size, color, name, image, unit_price, shipping_rate_aud, quantity
        FROM user_cart_items
        WHERE user_id=?
        ORDER BY updated_at DESC`
     )
     .all(userId) as Array<{
+    bundle_id: string | null;
+    bundle_name: string | null;
     product_id: string;
     variant_id: string;
     size: string;
@@ -2695,6 +2701,8 @@ export function listUserCartItems(userId: string): CartItem[] {
     quantity: number;
   }>;
   return rows.map((row) => ({
+    bundleId: row.bundle_id ?? undefined,
+    bundleName: row.bundle_name ?? undefined,
     productId: row.product_id,
     variantId: row.variant_id,
     size: row.size,
@@ -2714,14 +2722,16 @@ export function replaceUserCart(userId: string, items: CartItem[]) {
     if (!items.length) return;
     const insert = db.prepare(
       `INSERT INTO user_cart_items (
-        id,user_id,product_id,variant_id,size,color,name,image,unit_price,shipping_rate_aud,quantity,created_at,updated_at
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
+        id,user_id,bundle_id,bundle_name,product_id,variant_id,size,color,name,image,unit_price,shipping_rate_aud,quantity,created_at,updated_at
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
     );
     for (const item of items) {
       if (!item.variantId || item.quantity <= 0) continue;
       insert.run(
         crypto.randomUUID(),
         userId,
+        item.bundleId ?? null,
+        item.bundleName ?? null,
         item.productId,
         item.variantId,
         item.size,

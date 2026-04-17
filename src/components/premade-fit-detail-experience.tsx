@@ -91,11 +91,14 @@ export function PremadeFitDetailExperience({
   const addFitToCart = async (goCheckout: boolean) => {
     if (!(await ensureLoggedIn())) return;
     if (soldOut) return;
+    const bundleId = `fit-${crypto.randomUUID()}`;
     const items = includedRows
       .filter((row): row is typeof row & { variant: NonNullable<typeof row.variant> } => Boolean(row.variant))
       .map((row) => {
         const colorImage = resolveColorImages(row.item, row.variant.color).mainImage;
         return {
+          bundleId,
+          bundleName: fit.name,
           productId: row.item.productId,
           variantId: row.variant.id,
           size: row.variant.size,
@@ -116,8 +119,8 @@ export function PremadeFitDetailExperience({
       <BackNavButton fallbackHref="/premade-fits" label="Back" />
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="space-y-3">
-          <div className="relative min-h-[360px] overflow-hidden rounded-2xl border border-white/10 bg-black/30">
-            <Image src={activeImage} alt={fit.name} fill sizes="(max-width: 1024px) 100vw, 50vw" className="object-contain p-4" />
+          <div className="relative mx-auto aspect-square w-full max-w-[500px] overflow-hidden rounded-2xl border border-white/10 bg-black/30">
+            <Image src={activeImage} alt={fit.name} fill sizes="(max-width: 768px) 92vw, 500px" className="object-contain p-4" />
           </div>
           <div className="grid grid-cols-4 gap-2">
             {[fit.coverImage, ...fit.galleryImages].filter(Boolean).slice(0, 8).map((image) => (

@@ -51,7 +51,7 @@ export default function Home() {
               shipping in Australia only.
             </p>
             <div className="mt-4">
-              <CategoryNav />
+              <CategoryNav compact />
             </div>
             <div className="mt-4 grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-center sm:gap-4">
               <Link

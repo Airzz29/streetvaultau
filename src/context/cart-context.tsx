@@ -16,6 +16,7 @@ type CartContextValue = {
   addItem: (item: CartItem) => void;
   addItems: (items: CartItem[]) => void;
   removeItem: (variantId: string) => void;
+  removeBundle: (bundleId: string) => void;
   updateQuantity: (variantId: string, quantity: number) => void;
   clearCart: () => void;
   totalItems: number;
@@ -24,6 +25,10 @@ type CartContextValue = {
 };
 
 const CartContext = createContext<CartContextValue | null>(null);
+
+function getCartMergeKey(item: CartItem) {
+  return item.bundleId ? `${item.bundleId}::${item.variantId}` : item.variantId;
+}
 
 function normalizeItems(items: CartItem[]) {
   return items
@@ -38,12 +43,13 @@ function normalizeItems(items: CartItem[]) {
 function mergeCartItems(localItems: CartItem[], accountItems: CartItem[]) {
   const merged = new Map<string, CartItem>();
   for (const item of [...accountItems, ...localItems]) {
-    const existing = merged.get(item.variantId);
+    const key = getCartMergeKey(item);
+    const existing = merged.get(key);
     if (!existing) {
-      merged.set(item.variantId, { ...item });
+      merged.set(key, { ...item });
       continue;
     }
-    merged.set(item.variantId, {
+    merged.set(key, {
       ...existing,
       quantity: existing.quantity + item.quantity,
     });
@@ -152,8 +158,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const addItem = (incomingItem: CartItem) => {
     setRecentAdd(incomingItem);
     setItems((currentItems) => {
+      const incomingKey = getCartMergeKey(incomingItem);
       const existingIndex = currentItems.findIndex(
-        (item) => item.variantId === incomingItem.variantId
+        (item) => getCartMergeKey(item) === incomingKey
       );
 
       if (existingIndex >= 0) {
@@ -177,6 +184,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setItems((currentItems) =>
       currentItems.filter((item) => item.variantId !== variantId)
     );
+  };
+
+  const removeBundle = (bundleId: string) => {
+    setItems((currentItems) => currentItems.filter((item) => item.bundleId !== bundleId));
   };
 
   const updateQuantity = (variantId: string, quantity: number) => {
@@ -212,6 +223,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     addItem,
     addItems,
     removeItem,
+    removeBundle,
     updateQuantity,
     clearCart,
     totalItems,

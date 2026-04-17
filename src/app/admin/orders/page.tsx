@@ -6,6 +6,18 @@ import { formatPriceAUD } from "@/lib/utils";
 import { Order } from "@/types/order";
 
 type FulfillmentGroup = "pending" | "shipped" | "delivered" | "cancelled";
+type LabelDraft = {
+  contactName: string;
+  businessName: string;
+  country: string;
+  addressType: string;
+  address: string;
+  email: string;
+  phone: string;
+  saveAddress: boolean;
+  reference: string;
+  sendTrackingNotifications: boolean;
+};
 
 export default function AdminOrdersRoute() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -14,6 +26,7 @@ export default function AdminOrdersRoute() {
   const [trackingDrafts, setTrackingDrafts] = useState<Record<string, string>>({});
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [copiedOrderId, setCopiedOrderId] = useState<string | null>(null);
+  const [labelDrafts, setLabelDrafts] = useState<Record<string, LabelDraft>>({});
 
   const load = async () => {
     const response = await fetch("/api/admin/orders", { cache: "no-store", credentials: "include" });
@@ -131,6 +144,78 @@ Phone: ${order.shippingAddress.phone ?? "N/A"}`
       setCopiedOrderId(order.id);
       window.setTimeout(() => {
         setCopiedOrderId((current) => (current === order.id ? null : current));
+      }, 1800);
+    } catch {
+      setCopiedOrderId(null);
+    }
+  };
+
+  const getLabelDraft = (order: Order): LabelDraft => {
+    const current = labelDrafts[order.id];
+    if (current) return current;
+    const address = order.shippingAddress;
+    return {
+      contactName: `${address?.firstName ?? ""} ${address?.lastName ?? ""}`.trim(),
+      businessName: "",
+      country: "Australia",
+      addressType: "Residential or business",
+      address: address
+        ? `${address.addressLine1}${address.addressLine2 ? `, ${address.addressLine2}` : ""}, ${address.city}, ${address.stateRegion} ${address.postcode}`
+        : "",
+      email: order.customerEmail ?? "",
+      phone: address?.phone ?? "",
+      saveAddress: true,
+      reference: `StreetVault #${order.id.slice(0, 8)}`,
+      sendTrackingNotifications: true,
+    };
+  };
+
+  const updateLabelDraft = (orderId: string, patch: Partial<LabelDraft>) => {
+    setLabelDrafts((prev) => ({
+      ...prev,
+      [orderId]: {
+        ...(prev[orderId] ?? {
+          contactName: "",
+          businessName: "",
+          country: "Australia",
+          addressType: "Residential or business",
+          address: "",
+          email: "",
+          phone: "",
+          saveAddress: true,
+          reference: "",
+          sendTrackingNotifications: true,
+        }),
+        ...patch,
+      },
+    }));
+  };
+
+  const copyAusPostTemplate = async (order: Order) => {
+    const draft = getLabelDraft(order);
+    const lines = [
+      "Deliver to",
+      "All fields are required unless marked as optional.",
+      "",
+      `Contact name: ${draft.contactName || "N/A"}`,
+      `Business name (optional): ${draft.businessName || ""}`,
+      `Country / region: ${draft.country || "Australia"}`,
+      `Type of address: ${draft.addressType || "Residential or business"}`,
+      "Turn off auto-complete: No",
+      `Address: ${draft.address || "N/A"}`,
+      `Email address (optional): ${draft.email || ""}`,
+      `Phone number (optional): ${draft.phone || ""}`,
+      `Save this address: ${draft.saveAddress ? "Yes" : "No"}`,
+      "Additional information",
+      "This field is displayed on the label and can be used as a reference.",
+      `Your reference (optional): ${draft.reference || ""}`,
+      `Send tracking notifications to this recipient (optional): ${draft.sendTrackingNotifications ? "Yes" : "No"}`,
+    ];
+    try {
+      await navigator.clipboard.writeText(lines.join("\n"));
+      setCopiedOrderId(`auspost-${order.id}`);
+      window.setTimeout(() => {
+        setCopiedOrderId((current) => (current === `auspost-${order.id}` ? null : current));
       }, 1800);
     } catch {
       setCopiedOrderId(null);
@@ -274,7 +359,37 @@ Phone: ${order.shippingAddress.phone ?? "N/A"}`
                 }
               />
             </div>
+            {(() => {
+              const draft = getLabelDraft(selectedOrder);
+              return (
+                <div className="mt-4 rounded-2xl border border-emerald-300/30 bg-emerald-500/5 p-4">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-emerald-200">AusPost label helper (copy/paste ready)</p>
+                    <button
+                      type="button"
+                      onClick={() => copyAusPostTemplate(selectedOrder)}
+                      className="rounded-md border border-emerald-300/30 px-3 py-1.5 text-xs text-emerald-100 hover:bg-emerald-400/10"
+                    >
+                      {copiedOrderId === `auspost-${selectedOrder.id}` ? "Copied" : "Copy AusPost fields"}
+                    </button>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <input value={draft.contactName} onChange={(e) => updateLabelDraft(selectedOrder.id, { contactName: e.target.value })} placeholder="Contact name" className="rounded-md border border-white/15 bg-black/30 px-2 py-2 text-xs" />
+                    <input value={draft.businessName} onChange={(e) => updateLabelDraft(selectedOrder.id, { businessName: e.target.value })} placeholder="Business name (optional)" className="rounded-md border border-white/15 bg-black/30 px-2 py-2 text-xs" />
+                    <input value={draft.country} onChange={(e) => updateLabelDraft(selectedOrder.id, { country: e.target.value })} placeholder="Country / region" className="rounded-md border border-white/15 bg-black/30 px-2 py-2 text-xs" />
+                    <input value={draft.addressType} onChange={(e) => updateLabelDraft(selectedOrder.id, { addressType: e.target.value })} placeholder="Type of address" className="rounded-md border border-white/15 bg-black/30 px-2 py-2 text-xs" />
+                    <input value={draft.address} onChange={(e) => updateLabelDraft(selectedOrder.id, { address: e.target.value })} placeholder="Address" className="rounded-md border border-white/15 bg-black/30 px-2 py-2 text-xs sm:col-span-2" />
+                    <input value={draft.email} onChange={(e) => updateLabelDraft(selectedOrder.id, { email: e.target.value })} placeholder="Email address (optional)" className="rounded-md border border-white/15 bg-black/30 px-2 py-2 text-xs" />
+                    <input value={draft.phone} onChange={(e) => updateLabelDraft(selectedOrder.id, { phone: e.target.value })} placeholder="Phone number (optional)" className="rounded-md border border-white/15 bg-black/30 px-2 py-2 text-xs" />
+                    <input value={draft.reference} onChange={(e) => updateLabelDraft(selectedOrder.id, { reference: e.target.value })} placeholder="Your reference (optional)" className="rounded-md border border-white/15 bg-black/30 px-2 py-2 text-xs sm:col-span-2" />
+                  </div>
+                </div>
+              );
+            })()}
             <div className="mt-4">
+              <div className="mb-2 rounded-lg border border-white/10 bg-black/30 p-2 text-xs text-zinc-300">
+                This order ships as one parcel for fulfillment. Total units: {selectedOrder.items.reduce((sum, item) => sum + item.quantity, 0)}.
+              </div>
               <p className="mb-2 text-sm font-semibold text-zinc-300">Purchased items</p>
               <div className="grid gap-2">
                 {selectedOrder.items.map((item, index) => (

@@ -8,7 +8,7 @@ import { useCart } from "@/context/cart-context";
 import { formatPriceAUD } from "@/lib/utils";
 
 export default function CartPage() {
-  const { items, removeItem, updateQuantity } = useCart();
+  const { items, removeItem, removeBundle, updateQuantity } = useCart();
   const router = useRouter();
   const [discountCode, setDiscountCode] = useState("");
   const subtotal = useMemo(
@@ -20,6 +20,27 @@ export default function CartPage() {
     [items]
   );
   const total = subtotal + shipping;
+  const groupedRows = useMemo(() => {
+    const bundled = new Map<string, { bundleId: string; bundleName: string; items: typeof items }>();
+    const singles: typeof items = [];
+    for (const item of items) {
+      if (!item.bundleId) {
+        singles.push(item);
+        continue;
+      }
+      const existing = bundled.get(item.bundleId);
+      if (existing) {
+        existing.items.push(item);
+        continue;
+      }
+      bundled.set(item.bundleId, {
+        bundleId: item.bundleId,
+        bundleName: item.bundleName ?? "Premade Outfit",
+        items: [item],
+      });
+    }
+    return { bundles: Array.from(bundled.values()), singles };
+  }, [items]);
 
   useEffect(() => {
     const stored = window.localStorage.getItem("streetvault-discount-code") ?? "";
@@ -46,7 +67,50 @@ export default function CartPage() {
       <h1 className="text-2xl font-semibold sm:text-3xl">Your Cart</h1>
       <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
         <div className="space-y-3">
-          {items.map((item) => (
+          {groupedRows.bundles.map((bundle) => (
+            <article
+              key={bundle.bundleId}
+              className="rounded-2xl border border-emerald-300/25 bg-emerald-500/5 p-4 backdrop-blur-xl"
+            >
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.14em] text-emerald-300/80">Premade outfit bundle</p>
+                  <p className="font-semibold text-zinc-100">{bundle.bundleName}</p>
+                  <p className="text-xs text-zinc-400">{bundle.items.length} locked items ship together</p>
+                </div>
+                <button
+                  onClick={() => removeBundle(bundle.bundleId)}
+                  className="min-h-11 rounded-lg border border-red-500/40 px-3 py-2 text-sm text-red-200 hover:bg-red-500/10"
+                >
+                  Remove Outfit
+                </button>
+              </div>
+              <div className="space-y-3">
+                {bundle.items.map((item) => (
+                  <div key={`${bundle.bundleId}-${item.variantId}`} className="rounded-xl border border-white/10 bg-black/25 p-3">
+                    <div className="flex items-start gap-3">
+                      <div className="relative h-20 w-20 flex-shrink-0 overflow-hidden rounded-lg border border-zinc-800">
+                        <Image src={item.image} alt={item.name} fill sizes="80px" className="object-contain p-1.5" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="line-clamp-1 font-medium">{item.name}</p>
+                        <p className="text-sm text-zinc-400">
+                          {item.color} / {item.size}
+                        </p>
+                        <p className="text-xs text-zinc-500">
+                          Shipping {formatPriceAUD(item.shippingRateAUD)} each
+                        </p>
+                      </div>
+                      <p className="text-right text-base font-semibold">
+                        {formatPriceAUD(item.unitPrice * item.quantity)}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </article>
+          ))}
+          {groupedRows.singles.map((item) => (
             <article
               key={item.variantId}
               className="rounded-2xl border border-white/10 bg-black/30 p-4 backdrop-blur-xl"
