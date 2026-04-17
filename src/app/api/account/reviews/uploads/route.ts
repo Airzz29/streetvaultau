@@ -1,8 +1,8 @@
-import path from "node:path";
 import { promises as fs } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
+import { getUploadDirectory } from "@/lib/uploads-path";
 
 const allowedTypes = new Set(["image/png", "image/webp", "image/jpeg", "image/jpg"]);
 
@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
     if (!files.length) return NextResponse.json({ error: "No files uploaded." }, { status: 400 });
     if (files.length > 3) return NextResponse.json({ error: "Maximum 3 images." }, { status: 400 });
 
-    const uploadDir = path.join(process.cwd(), "public", "uploads", "reviews");
+    const uploadDir = getUploadDirectory("reviews");
     await fs.mkdir(uploadDir, { recursive: true });
     const sharp = (await import("sharp")).default;
     const uploaded: string[] = [];

@@ -1,8 +1,8 @@
-import path from "node:path";
 import { promises as fs } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
+import { getUploadDirectory } from "@/lib/uploads-path";
 
 const allowedTypes = new Set(["image/png", "image/webp", "image/jpeg", "image/jpg"]);
 
@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No files uploaded." }, { status: 400 });
     }
 
-    const uploadDir = path.join(process.cwd(), "public", "uploads", "products");
+    const uploadDir = getUploadDirectory("products");
     await fs.mkdir(uploadDir, { recursive: true });
 
     const uploaded: string[] = [];

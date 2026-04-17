@@ -1,6 +1,7 @@
 import path from "node:path";
 import { promises as fs } from "node:fs";
 import { NextResponse } from "next/server";
+import { getLegacyUploadDirectory, getUploadDirectory } from "@/lib/uploads-path";
 
 const MIME_BY_EXT: Record<string, string> = {
   ".webp": "image/webp",
@@ -23,14 +24,18 @@ export async function GET(
     return new NextResponse("Invalid file.", { status: 400 });
   }
 
-  const uploadsDir = path.join(process.cwd(), "public", "uploads", "products");
-  const fullPath = path.join(uploadsDir, file);
-
   try {
-    const data = await fs.readFile(fullPath);
+    const primaryPath = path.join(getUploadDirectory("products"), file);
+    const fallbackPath = path.join(getLegacyUploadDirectory("products"), file);
+    let data: Buffer;
+    try {
+      data = await fs.readFile(primaryPath);
+    } catch {
+      data = await fs.readFile(fallbackPath);
+    }
     const ext = path.extname(file).toLowerCase();
     const contentType = MIME_BY_EXT[ext] ?? "application/octet-stream";
-    return new NextResponse(data, {
+    return new NextResponse(new Uint8Array(data), {
       status: 200,
       headers: {
         "Content-Type": contentType,
