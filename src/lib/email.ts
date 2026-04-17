@@ -33,6 +33,14 @@ function toAbsoluteImageUrl(image: string, siteUrl: string) {
   return `${siteUrl}${trimmed.startsWith("/") ? trimmed : `/${trimmed}`}`;
 }
 
+function toAbsoluteUrl(url?: string) {
+  if (!url?.trim()) return undefined;
+  const trimmed = url.trim();
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  const siteUrl = resolveAppBaseUrl();
+  return `${siteUrl}${trimmed.startsWith("/") ? trimmed : `/${trimmed}`}`;
+}
+
 function renderOrderItemsEmailTable(
   items: Array<{
     name: string;
@@ -374,6 +382,7 @@ export async function sendMarketingCampaignEmail(params: {
   const transport = getTransport();
   const from = process.env.EMAIL_FROM ?? process.env.EMAIL_SMTP_USER;
   if (!transport || !from) return { sent: false };
+  const ctaUrl = toAbsoluteUrl(params.ctaUrl);
   const safeBody = params.body
     .split(/\r?\n/)
     .map((line) => `<p style="margin:0 0 10px;color:#d4d4d8;font-size:14px;line-height:1.7;">${escapeHtml(line)}</p>`)
@@ -388,8 +397,8 @@ export async function sendMarketingCampaignEmail(params: {
       subtitle: "Latest update from StreetVault.",
       bodyHtml: safeBody,
       ctaLabel: params.ctaLabel,
-      ctaUrl: params.ctaUrl,
-      fallbackText: params.ctaUrl ? "If the button does not work, use this link:" : undefined,
+      ctaUrl,
+      fallbackText: ctaUrl ? "If the button does not work, use this link:" : undefined,
     }),
   });
   return { sent: true };

@@ -167,16 +167,6 @@ export default function AdminProductsRoute() {
     });
   };
 
-  const upsertColorGroup = (color: string) => {
-    const normalizedColor = color.trim();
-    if (!normalizedColor) return;
-    setColorImageGroups((prev) => {
-      const existing = prev.find((group) => group.color.toLowerCase() === normalizedColor.toLowerCase());
-      if (existing) return prev;
-      return [...prev, { color: normalizedColor, mainImage: null, builderImage: null, galleryImages: [] }];
-    });
-  };
-
   const updateColorGroup = (index: number, next: ProductColorImageGroup) => {
     setColorImageGroups((prev) => prev.map((group, i) => (i === index ? next : group)));
   };
@@ -214,12 +204,33 @@ export default function AdminProductsRoute() {
   );
 
   useEffect(() => {
-    const uniqueColors = Array.from(new Set(parsedVariants.map((variant) => variant.color)));
-    for (const color of uniqueColors) {
-      upsertColorGroup(color);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [parsedVariants]);
+    const committedColors = Array.from(
+      new Set(
+        variantRows
+          .filter(
+            (row) =>
+              row.color.trim() &&
+              row.size.trim() &&
+              row.stock.trim() !== "" &&
+              Number(row.stock) >= 0
+          )
+          .map((row) => row.color.trim())
+      )
+    );
+    if (!committedColors.length) return;
+    setColorImageGroups((prev) => {
+      const byColor = new Map(prev.map((group) => [group.color.trim().toLowerCase(), group]));
+      return committedColors.map(
+        (color) =>
+          byColor.get(color.toLowerCase()) ?? {
+            color,
+            mainImage: null,
+            builderImage: null,
+            galleryImages: [],
+          }
+      );
+    });
+  }, [variantRows]);
 
   useEffect(() => {
     if (!variantOptions.length) {

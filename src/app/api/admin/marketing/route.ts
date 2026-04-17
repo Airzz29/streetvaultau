@@ -18,6 +18,13 @@ type CampaignBody = {
   sendMode?: "test" | "subscribers";
 };
 
+function toAbsoluteCampaignUrl(input: string | undefined, siteUrl: string) {
+  const raw = input?.trim();
+  if (!raw) return `${siteUrl}/shop`;
+  if (/^https?:\/\//i.test(raw)) return raw;
+  return `${siteUrl}${raw.startsWith("/") ? raw : `/${raw}`}`;
+}
+
 export async function GET() {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -70,7 +77,7 @@ export async function POST(request: NextRequest) {
   }
 
   const siteUrl = resolveAppBaseUrl();
-  const ctaUrl = body.ctaUrl?.trim() || `${siteUrl}/shop`;
+  const ctaUrl = toAbsoluteCampaignUrl(body.ctaUrl, siteUrl);
   const ctaLabel = body.ctaLabel?.trim() || "Shop Now";
   const sendMode = body.sendMode ?? "subscribers";
 
