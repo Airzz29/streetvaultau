@@ -21,6 +21,9 @@ export function Footer() {
           <Link href="/policy" className="text-zinc-300 hover:text-zinc-100">
             Refund / Return Policy
           </Link>
+          <Link href="/shipping-policy" className="text-zinc-300 hover:text-zinc-100">
+            Shipping Policy
+          </Link>
           <a
             href="https://instagram.com/streetvault"
             target="_blank"

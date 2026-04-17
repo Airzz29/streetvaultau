@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import { resolveAppBaseUrl } from "@/lib/app-url";
 
 function getTransport() {
   const host = process.env.EMAIL_SMTP_HOST ?? "smtp.gmail.com";
@@ -16,6 +17,63 @@ function getTransport() {
   });
 }
 
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function toAbsoluteImageUrl(image: string, siteUrl: string) {
+  const trimmed = image.trim();
+  if (!trimmed) return "";
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `${siteUrl}${trimmed.startsWith("/") ? trimmed : `/${trimmed}`}`;
+}
+
+function renderOrderItemsEmailTable(
+  items: Array<{
+    name: string;
+    size?: string | null;
+    quantity: number;
+    unitPrice?: number;
+    image?: string | null;
+  }>,
+  siteUrl: string
+) {
+  if (!items.length) return "";
+  const rows = items
+    .map((item) => {
+      const imageUrl = item.image ? toAbsoluteImageUrl(item.image, siteUrl) : "";
+      const variantLabel = item.size ? `Size ${escapeHtml(item.size)}` : "Variant selected";
+      const priceLabel =
+        typeof item.unitPrice === "number" ? ` · ${item.unitPrice.toFixed(2)} AUD each` : "";
+      return `
+      <tr>
+        <td style="padding:10px;border-bottom:1px solid #27272a;vertical-align:top;">
+          ${
+            imageUrl
+              ? `<img src="${imageUrl}" alt="${escapeHtml(item.name)}" width="64" height="64" style="display:block;border-radius:10px;border:1px solid #3f3f46;object-fit:cover;background:#111827;" />`
+              : `<div style="width:64px;height:64px;border-radius:10px;border:1px solid #3f3f46;background:#111827;"></div>`
+          }
+        </td>
+        <td style="padding:10px;border-bottom:1px solid #27272a;vertical-align:top;">
+          <p style="margin:0 0 4px;font-size:14px;line-height:1.5;color:#f4f4f5;font-weight:600;">${escapeHtml(item.name)}</p>
+          <p style="margin:0;font-size:12px;line-height:1.5;color:#d4d4d8;">${variantLabel} · Qty ${item.quantity}${priceLabel}</p>
+        </td>
+      </tr>`;
+    })
+    .join("");
+
+  return `
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border:1px solid #3f3f46;border-radius:12px;overflow:hidden;background:#111827;margin:14px 0;">
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
 function wrapBrandEmail(params: {
   title: string;
   subtitle: string;
@@ -23,48 +81,71 @@ function wrapBrandEmail(params: {
   ctaLabel?: string;
   ctaUrl?: string;
   fallbackText?: string;
+  secondaryCtaLabel?: string;
+  secondaryCtaUrl?: string;
 }) {
   const ctaBlock =
     params.ctaLabel && params.ctaUrl
-      ? `<p style="margin:24px 0 14px;">
-          <a href="${params.ctaUrl}" style="display:inline-block;padding:12px 20px;border-radius:12px;background:#f4f4f5;color:#111827;text-decoration:none;font-weight:700;">
+      ? `<p style="margin:24px 0 10px;">
+          <a href="${params.ctaUrl}" style="display:inline-block;padding:12px 20px;border-radius:10px;background:#f4f4f5;color:#111827 !important;text-decoration:none;font-weight:700;font-size:14px;border:1px solid #d4d4d8;">
             ${params.ctaLabel}
+          </a>
+        </p>`
+      : "";
+  const secondaryCtaBlock =
+    params.secondaryCtaLabel && params.secondaryCtaUrl
+      ? `<p style="margin:0 0 12px;">
+          <a href="${params.secondaryCtaUrl}" style="display:inline-block;padding:10px 16px;border-radius:10px;background:#18181b;color:#f4f4f5 !important;text-decoration:none;font-weight:600;font-size:13px;border:1px solid #3f3f46;">
+            ${params.secondaryCtaLabel}
           </a>
         </p>`
       : "";
   const fallbackBlock =
     params.ctaUrl && params.fallbackText
-      ? `<p style="margin:0 0 10px;color:#a1a1aa;font-size:13px;">${params.fallbackText}</p>
+      ? `<p style="margin:0 0 10px;color:#a1a1aa;font-size:13px;line-height:1.5;">${params.fallbackText}</p>
          <p style="margin:0 0 20px;word-break:break-all;">
-           <a href="${params.ctaUrl}" style="color:#c4b5fd;text-decoration:none;">${params.ctaUrl}</a>
+           <a href="${params.ctaUrl}" style="color:#93c5fd;text-decoration:none;">${params.ctaUrl}</a>
          </p>`
       : "";
 
-  return `
-  <div style="margin:0;padding:24px 12px;background:#05060b;font-family:Inter,Segoe UI,Arial,sans-serif;color:#f4f4f5;">
-    <div style="max-width:560px;margin:0 auto;border:1px solid rgba(255,255,255,0.12);border-radius:18px;overflow:hidden;background:linear-gradient(180deg,rgba(17,24,39,0.92),rgba(9,9,11,0.95));">
-      <div style="padding:22px 22px 12px;border-bottom:1px solid rgba(255,255,255,0.08);">
-        <p style="margin:0 0 8px;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:#a1a1aa;">StreetVault</p>
-        <h1 style="margin:0;font-size:24px;line-height:1.25;color:#fafafa;">${params.title}</h1>
-        <p style="margin:10px 0 0;color:#d4d4d8;font-size:14px;line-height:1.6;">${params.subtitle}</p>
-      </div>
-      <div style="padding:22px;">
-        ${params.bodyHtml}
-        ${ctaBlock}
-        ${fallbackBlock}
-        <p style="margin:14px 0 0;color:#a1a1aa;font-size:12px;line-height:1.6;">
-          Need help? Reply to this email and our team will assist you.
-        </p>
-      </div>
-    </div>
-  </div>
-  `;
+  return `<!doctype html>
+<html lang="en">
+  <body style="margin:0;padding:0;background:#0a0a0b;">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#0a0a0b;padding:22px 10px;font-family:Arial,'Segoe UI',sans-serif;">
+      <tr>
+        <td align="center">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:600px;border:1px solid #27272a;border-radius:16px;background:#111827;overflow:hidden;">
+            <tr>
+              <td style="padding:22px;border-bottom:1px solid #27272a;">
+                <p style="margin:0 0 8px;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#a1a1aa;">StreetVault</p>
+                <h1 style="margin:0;font-size:24px;line-height:1.25;color:#fafafa;font-weight:700;">${params.title}</h1>
+                <p style="margin:10px 0 0;font-size:14px;line-height:1.6;color:#e4e4e7;">${params.subtitle}</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:22px;">
+                ${params.bodyHtml}
+                ${ctaBlock}
+                ${secondaryCtaBlock}
+                ${fallbackBlock}
+                <p style="margin:12px 0 0;color:#a1a1aa;font-size:12px;line-height:1.7;">
+                  Need help? Reply to this email or use our contact page and our team will assist you.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
 }
 
 export async function sendWelcomeEmail(params: { to: string; firstName: string }) {
   const transport = getTransport();
   const from = process.env.EMAIL_FROM ?? process.env.EMAIL_SMTP_USER;
   if (!transport || !from) return { sent: false };
+  const siteUrl = resolveAppBaseUrl();
   await transport.sendMail({
     from,
     to: params.to,
@@ -73,9 +154,11 @@ export async function sendWelcomeEmail(params: { to: string; firstName: string }
       title: `Welcome to StreetVault, ${params.firstName}`,
       subtitle: "Your account is now live and ready for premium streetwear drops.",
       bodyHtml:
-        "<p style='margin:0 0 12px;color:#e4e4e7;font-size:14px;line-height:1.7;'>You can now track orders, save your details, and move through checkout faster.</p><p style='margin:0;color:#d4d4d8;font-size:14px;line-height:1.7;'>We will keep you updated on new releases and restocks.</p>",
+        "<p style='margin:0 0 12px;color:#e4e4e7;font-size:14px;line-height:1.7;'>You can now track orders, save your details, and move through checkout faster.</p><p style='margin:0;color:#d4d4d8;font-size:14px;line-height:1.7;'>We will keep you updated on new releases, restocks, and special drops.</p>",
       ctaLabel: "Explore StreetVault",
-      ctaUrl: `${process.env.NEXT_PUBLIC_SITE_URL ?? process.env.SITE_URL ?? "http://localhost:3000"}/shop`,
+      ctaUrl: `${siteUrl}/shop`,
+      secondaryCtaLabel: "View My Account",
+      secondaryCtaUrl: `${siteUrl}/account`,
       fallbackText: "If the button does not work, use this link:",
     }),
   });
@@ -94,7 +177,7 @@ export async function sendPasswordResetEmail(params: { to: string; resetUrl: str
       title: "Reset your password",
       subtitle: "A password reset was requested for your StreetVault account.",
       bodyHtml:
-        "<p style='margin:0 0 12px;color:#e4e4e7;font-size:14px;line-height:1.7;'>Click the button below to reset your password. This link expires in <strong>1 hour</strong>.</p><p style='margin:0;color:#d4d4d8;font-size:14px;line-height:1.7;'>If you did not request this, you can safely ignore this email. No changes will be made unless you set a new password.</p>",
+        "<p style='margin:0 0 12px;color:#e4e4e7;font-size:14px;line-height:1.7;'>Click the button below to reset your password. This secure link expires in <strong>1 hour</strong>.</p><p style='margin:0;color:#d4d4d8;font-size:14px;line-height:1.7;'>If you did not request this, you can safely ignore this email. No changes will be made unless you set a new password.</p>",
       ctaLabel: "Reset Password",
       ctaUrl: params.resetUrl,
       fallbackText: "If the button does not work, use this secure reset link:",
@@ -107,19 +190,20 @@ export async function sendOrderConfirmationEmail(params: {
   to: string;
   customerName?: string | null;
   orderId: string;
-  items: Array<{ name: string; size: string; quantity: number; unitPrice: number }>;
+  items: Array<{
+    name: string;
+    size: string;
+    quantity: number;
+    unitPrice: number;
+    image?: string | null;
+  }>;
   totalAUD: number;
 }) {
   const transport = getTransport();
   const from = process.env.EMAIL_FROM ?? process.env.EMAIL_SMTP_USER;
   if (!transport || !from) return { sent: false };
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? process.env.SITE_URL ?? "http://localhost:3000";
-  const orderLines = params.items
-    .map(
-      (item) =>
-        `<li style="margin:0 0 8px;color:#d4d4d8;font-size:14px;line-height:1.6;">${item.name} (${item.size}) x${item.quantity} - ${item.unitPrice.toFixed(2)} AUD</li>`
-    )
-    .join("");
+  const siteUrl = resolveAppBaseUrl();
+  const orderItemsTable = renderOrderItemsEmailTable(params.items, siteUrl);
   await transport.sendMail({
     from,
     to: params.to,
@@ -134,9 +218,8 @@ export async function sendOrderConfirmationEmail(params: {
         <p style="margin:0 0 12px;color:#d4d4d8;font-size:14px;line-height:1.7;">
           Order number: <strong>#${params.orderId.slice(0, 8)}</strong>
         </p>
-        <ul style="margin:0 0 12px;padding-left:18px;">
-          ${orderLines}
-        </ul>
+        <p style="margin:0 0 8px;color:#e4e4e7;font-size:14px;line-height:1.7;">Items purchased:</p>
+        ${orderItemsTable}
         <p style="margin:0 0 12px;color:#fafafa;font-size:15px;line-height:1.7;">
           Total: <strong>${params.totalAUD.toFixed(2)} AUD</strong>
         </p>
@@ -157,21 +240,16 @@ export async function sendShippingConfirmationEmail(params: {
   customerName?: string | null;
   orderId: string;
   trackingNumber: string;
-  items?: Array<{ name: string; size: string; quantity: number }>;
+  items?: Array<{ name: string; size: string; quantity: number; image?: string | null }>;
 }) {
   const transport = getTransport();
   const from = process.env.EMAIL_FROM ?? process.env.EMAIL_SMTP_USER;
   if (!transport || !from) return { sent: false };
+  const siteUrl = resolveAppBaseUrl();
   const trackUrl = `https://auspost.com.au/mypost/track/details/${encodeURIComponent(
     params.trackingNumber
   )}`;
-  const orderItemsHtml = (params.items ?? [])
-    .slice(0, 6)
-    .map(
-      (item) =>
-        `<li style="margin:0 0 8px;color:#d4d4d8;font-size:14px;line-height:1.6;">${item.name} (${item.size}) x${item.quantity}</li>`
-    )
-    .join("");
+  const orderItemsHtml = renderOrderItemsEmailTable((params.items ?? []).slice(0, 8), siteUrl);
   await transport.sendMail({
     from,
     to: params.to,
@@ -194,10 +272,7 @@ export async function sendShippingConfirmationEmail(params: {
         </p>
         ${
           orderItemsHtml
-            ? `<p style="margin:0 0 8px;color:#e4e4e7;font-size:14px;line-height:1.7;">Items shipped:</p>
-               <ul style="margin:0 0 12px;padding-left:18px;">
-                 ${orderItemsHtml}
-               </ul>`
+            ? `<p style="margin:0 0 8px;color:#e4e4e7;font-size:14px;line-height:1.7;">Items shipped:</p>${orderItemsHtml}`
             : ""
         }
         <p style="margin:0;color:#d4d4d8;font-size:14px;line-height:1.7;">
@@ -216,11 +291,13 @@ export async function sendDeliveredConfirmationEmail(params: {
   to: string;
   customerName?: string | null;
   orderId: string;
+  items?: Array<{ name: string; size: string; quantity: number; image?: string | null }>;
 }) {
   const transport = getTransport();
   const from = process.env.EMAIL_FROM ?? process.env.EMAIL_SMTP_USER;
   if (!transport || !from) return { sent: false };
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? process.env.SITE_URL ?? "http://localhost:3000";
+  const siteUrl = resolveAppBaseUrl();
+  const deliveredItems = renderOrderItemsEmailTable((params.items ?? []).slice(0, 8), siteUrl);
   await transport.sendMail({
     from,
     to: params.to,
@@ -235,12 +312,19 @@ export async function sendDeliveredConfirmationEmail(params: {
         <p style="margin:0 0 12px;color:#d4d4d8;font-size:14px;line-height:1.7;">
           Order number: <strong>#${params.orderId.slice(0, 8)}</strong>
         </p>
+        ${
+          deliveredItems
+            ? `<p style="margin:0 0 8px;color:#e4e4e7;font-size:14px;line-height:1.7;">Delivered items:</p>${deliveredItems}`
+            : ""
+        }
         <p style="margin:0;color:#d4d4d8;font-size:14px;line-height:1.7;">
           We hope you enjoy your order. If you need help, contact our support team anytime.
         </p>
       `,
       ctaLabel: "View My Orders",
       ctaUrl: `${siteUrl}/account/orders`,
+      secondaryCtaLabel: "Leave a Review",
+      secondaryCtaUrl: `${siteUrl}/account/reviews`,
       fallbackText: "If the button does not work, use this link:",
     }),
   });
@@ -274,6 +358,38 @@ export async function sendEmailVerificationCodeEmail(params: {
           This code expires in ${params.expiresMinutes} minutes.
         </p>
       `,
+    }),
+  });
+  return { sent: true };
+}
+
+export async function sendMarketingCampaignEmail(params: {
+  to: string;
+  subject: string;
+  headline: string;
+  body: string;
+  ctaLabel?: string;
+  ctaUrl?: string;
+}) {
+  const transport = getTransport();
+  const from = process.env.EMAIL_FROM ?? process.env.EMAIL_SMTP_USER;
+  if (!transport || !from) return { sent: false };
+  const safeBody = params.body
+    .split(/\r?\n/)
+    .map((line) => `<p style="margin:0 0 10px;color:#d4d4d8;font-size:14px;line-height:1.7;">${escapeHtml(line)}</p>`)
+    .join("");
+
+  await transport.sendMail({
+    from,
+    to: params.to,
+    subject: params.subject,
+    html: wrapBrandEmail({
+      title: params.headline,
+      subtitle: "Latest update from StreetVault.",
+      bodyHtml: safeBody,
+      ctaLabel: params.ctaLabel,
+      ctaUrl: params.ctaUrl,
+      fallbackText: params.ctaUrl ? "If the button does not work, use this link:" : undefined,
     }),
   });
   return { sent: true };

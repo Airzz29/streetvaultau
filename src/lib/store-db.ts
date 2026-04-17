@@ -1732,6 +1732,30 @@ export function listUsers(search?: string) {
   return rows.map(mapUser);
 }
 
+export function listMarketingSubscribers() {
+  const rows = db
+    .prepare(
+      `SELECT id, first_name, last_name, email, created_at
+       FROM users
+       WHERE marketing_opt_in=1
+       ORDER BY created_at DESC`
+    )
+    .all() as Array<{
+    id: string;
+    first_name: string;
+    last_name: string;
+    email: string;
+    created_at: string;
+  }>;
+  return rows.map((row) => ({
+    id: row.id,
+    firstName: row.first_name,
+    lastName: row.last_name,
+    email: row.email,
+    createdAt: row.created_at,
+  }));
+}
+
 export function listUsersWithStats(search?: string) {
   const users = listUsers(search);
   if (users.length === 0) return [];

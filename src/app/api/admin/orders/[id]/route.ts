@@ -75,6 +75,7 @@ export async function PATCH(
           name: item.name,
           size: item.size,
           quantity: item.quantity,
+          image: item.image,
         })),
       });
       markOrderShippingEmailSent(updated.id);
@@ -100,6 +101,12 @@ export async function PATCH(
         to: updated.customerEmail,
         customerName: updated.customerName,
         orderId: updated.id,
+        items: updated.items.map((item) => ({
+          name: item.name,
+          size: item.size,
+          quantity: item.quantity,
+          image: item.image,
+        })),
       });
       markOrderDeliveredEmailSent(updated.id);
     } catch (error) {

@@ -42,6 +42,7 @@ export async function POST(request: NextRequest) {
                 size: item.size,
                 quantity: item.quantity,
                 unitPrice: item.unitPrice,
+                image: item.image,
               })),
               totalAUD: order.revenueAUD,
             });
