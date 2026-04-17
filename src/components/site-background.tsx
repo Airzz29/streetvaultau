@@ -23,16 +23,42 @@ export function SiteBackground() {
     if (!allowVideo) return;
     const video = videoRef.current;
     if (!video) return;
+    let cancelled = false;
 
     const attemptPlayback = async () => {
       try {
+        if (cancelled) return;
         await video.play();
       } catch {
         setVideoFailed(true);
       }
     };
-
-    attemptPlayback();
+    const schedule = () => {
+      if ("requestIdleCallback" in window) {
+        const idleId = (window as Window & {
+          requestIdleCallback: (cb: () => void, options?: { timeout: number }) => number;
+          cancelIdleCallback: (id: number) => void;
+        }).requestIdleCallback(
+          () => {
+            void attemptPlayback();
+          },
+          { timeout: 1200 }
+        );
+        return () =>
+          (window as Window & { cancelIdleCallback: (id: number) => void }).cancelIdleCallback(
+            idleId
+          );
+      }
+      const timeoutId = window.setTimeout(() => {
+        void attemptPlayback();
+      }, 180);
+      return () => window.clearTimeout(timeoutId);
+    };
+    const cleanup = schedule();
+    return () => {
+      cancelled = true;
+      cleanup();
+    };
   }, [allowVideo]);
 
   const showVideo = allowVideo && !videoFailed;

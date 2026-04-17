@@ -243,6 +243,55 @@ export async function sendOrderConfirmationEmail(params: {
   return { sent: true };
 }
 
+export async function sendAdminNewOrderAlertEmail(params: {
+  to: string;
+  orderId: string;
+  customerName?: string | null;
+  customerEmail?: string | null;
+  totalAUD: number;
+  items: Array<{ name: string; size: string; color: string; quantity: number; image?: string | null }>;
+}) {
+  const transport = getTransport();
+  const from = process.env.EMAIL_FROM ?? process.env.EMAIL_SMTP_USER;
+  if (!transport || !from) return { sent: false };
+  const siteUrl = resolveAppBaseUrl();
+  const orderItemsTable = renderOrderItemsEmailTable(
+    params.items.map((item) => ({
+      name: `${item.name} (${item.color})`,
+      size: item.size,
+      quantity: item.quantity,
+      image: item.image,
+    })),
+    siteUrl
+  );
+  await transport.sendMail({
+    from,
+    to: params.to,
+    subject: `New paid order received - #${params.orderId.slice(0, 8)}`,
+    html: wrapBrandEmail({
+      title: "New order requires fulfillment",
+      subtitle: "A paid order has been received. Please ship it as soon as possible.",
+      bodyHtml: `
+        <p style="margin:0 0 10px;color:#e4e4e7;font-size:14px;line-height:1.7;">
+          Order number: <strong>#${params.orderId.slice(0, 8)}</strong>
+        </p>
+        <p style="margin:0 0 10px;color:#d4d4d8;font-size:13px;line-height:1.6;">
+          Customer: ${escapeHtml(params.customerName ?? "N/A")} · ${escapeHtml(params.customerEmail ?? "N/A")}
+        </p>
+        <p style="margin:0 0 8px;color:#e4e4e7;font-size:14px;line-height:1.7;">Items purchased:</p>
+        ${orderItemsTable}
+        <p style="margin:0;color:#fafafa;font-size:15px;line-height:1.7;">
+          Total paid: <strong>${params.totalAUD.toFixed(2)} AUD</strong>
+        </p>
+      `,
+      ctaLabel: "Open Admin Orders",
+      ctaUrl: `${siteUrl}/admin/orders`,
+      fallbackText: "If the button does not work, use this admin link:",
+    }),
+  });
+  return { sent: true };
+}
+
 export async function sendShippingConfirmationEmail(params: {
   to: string;
   customerName?: string | null;
@@ -378,11 +427,12 @@ export async function sendMarketingCampaignEmail(params: {
   body: string;
   ctaLabel?: string;
   ctaUrl?: string;
+  recipientFirstName?: string;
   productHighlight?: {
     name: string;
     image?: string | null;
-    sizesInStock?: string[];
-    colorsInStock?: string[];
+    sizesInStock?: Array<{ label: string; stock: number }>;
+    colorsInStock?: Array<{ label: string; stock: number }>;
   };
 }) {
   const transport = getTransport();
@@ -405,18 +455,31 @@ export async function sendMarketingCampaignEmail(params: {
             <p style="margin:0 0 8px;font-size:14px;line-height:1.5;color:#f4f4f5;font-weight:700;">${escapeHtml(params.productHighlight.name)}</p>
             ${
               params.productHighlight.colorsInStock?.length
-                ? `<p style="margin:0 0 6px;font-size:12px;line-height:1.5;color:#d4d4d8;"><strong>Colors in stock:</strong> ${escapeHtml(params.productHighlight.colorsInStock.join(", "))}</p>`
+                ? `<p style="margin:0 0 6px;font-size:12px;line-height:1.5;color:#d4d4d8;"><strong>Colors in stock:</strong> ${escapeHtml(
+                    params.productHighlight.colorsInStock
+                      .map((entry) => `${entry.label} (${entry.stock})`)
+                      .join(", ")
+                  )}</p>`
                 : ""
             }
             ${
               params.productHighlight.sizesInStock?.length
-                ? `<p style="margin:0;font-size:12px;line-height:1.5;color:#d4d4d8;"><strong>Sizes in stock:</strong> ${escapeHtml(params.productHighlight.sizesInStock.join(", "))}</p>`
+                ? `<p style="margin:0;font-size:12px;line-height:1.5;color:#d4d4d8;"><strong>Sizes in stock:</strong> ${escapeHtml(
+                    params.productHighlight.sizesInStock
+                      .map((entry) => `${entry.label} (${entry.stock})`)
+                      .join(", ")
+                  )}</p>`
                 : ""
             }
           </td>
         </tr>
       </table>
     `
+    : "";
+  const greeting = params.recipientFirstName?.trim()
+    ? `<p style="margin:0 0 10px;color:#e4e4e7;font-size:14px;line-height:1.7;">Hi ${escapeHtml(
+        params.recipientFirstName.trim()
+      )},</p>`
     : "";
   const safeBody = params.body
     .split(/\r?\n/)
@@ -430,7 +493,7 @@ export async function sendMarketingCampaignEmail(params: {
     html: wrapBrandEmail({
       title: params.headline,
       subtitle: "Latest update from StreetVault.",
-      bodyHtml: `${productBlock}${safeBody}`,
+      bodyHtml: `${greeting}${productBlock}${safeBody}`,
       ctaLabel: params.ctaLabel,
       ctaUrl,
       fallbackText: ctaUrl ? "If the button does not work, use this link:" : undefined,

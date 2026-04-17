@@ -21,11 +21,17 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "StreetVault | Premium Streetwear",
+  title: "StreetVault Australia | Premium Streetwear Store",
   description:
     "StreetVault brings best quality clothes and shoes with 1-3 day express shipping in Australia only.",
   metadataBase: new URL(resolveAppBaseUrl()),
-  alternates: { canonical: "/" },
+  alternates: {
+    canonical: "/",
+    languages: {
+      "en-AU": "/",
+      en: "/",
+    },
+  },
   openGraph: {
     title: "StreetVault | Premium Streetwear",
     description:
@@ -40,6 +46,13 @@ export const metadata: Metadata = {
     description:
       "StreetVault brings best quality clothes and shoes with 1-3 day express shipping in Australia only.",
   },
+};
+
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover" as const,
+  themeColor: "#0a0a0b",
 };
 
 export default async function RootLayout({

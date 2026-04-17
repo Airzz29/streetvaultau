@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { getStripe } from "@/lib/stripe";
-import { createPaidOrderFromStripeSession, getOrderById } from "@/lib/store-db";
-import { sendOrderConfirmationEmail } from "@/lib/email";
+import { createPaidOrderFromStripeSession, getOrderById, listAdminUsers } from "@/lib/store-db";
+import { sendAdminNewOrderAlertEmail, sendOrderConfirmationEmail } from "@/lib/email";
 
 export async function POST(request: NextRequest) {
   const payload = await request.text();
@@ -48,6 +48,35 @@ export async function POST(request: NextRequest) {
             });
           } catch (error) {
             console.error("Order confirmation email error", error);
+          }
+        }
+        if (order) {
+          const adminRecipients = listAdminUsers()
+            .map((admin) => admin.email)
+            .filter((email) => Boolean(email?.trim()));
+          if (adminRecipients.length) {
+            try {
+              await Promise.allSettled(
+                adminRecipients.map((email) =>
+                  sendAdminNewOrderAlertEmail({
+                    to: email,
+                    orderId: order.id,
+                    customerName: order.customerName,
+                    customerEmail: order.customerEmail,
+                    totalAUD: order.revenueAUD,
+                    items: order.items.map((item) => ({
+                      name: item.name,
+                      size: item.size,
+                      color: item.color,
+                      quantity: item.quantity,
+                      image: item.image,
+                    })),
+                  })
+                )
+              );
+            } catch (error) {
+              console.error("Admin order alert email error", error);
+            }
           }
         }
       }

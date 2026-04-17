@@ -12,6 +12,24 @@ import { requireAdmin } from "@/lib/auth";
 import { resolveAppBaseUrl } from "@/lib/app-url";
 import { sendMarketingCampaignEmail } from "@/lib/email";
 
+function toStockSummary(variants: Array<{ size: string; color: string; stock: number }>) {
+  const sizeMap = new Map<string, number>();
+  const colorMap = new Map<string, number>();
+  for (const variant of variants) {
+    if (variant.stock <= 0) continue;
+    sizeMap.set(variant.size, (sizeMap.get(variant.size) ?? 0) + variant.stock);
+    colorMap.set(variant.color, (colorMap.get(variant.color) ?? 0) + variant.stock);
+  }
+  return {
+    sizesInStock: Array.from(sizeMap.entries())
+      .map(([label, stock]) => ({ label, stock }))
+      .sort((a, b) => a.label.localeCompare(b.label)),
+    colorsInStock: Array.from(colorMap.entries())
+      .map(([label, stock]) => ({ label, stock }))
+      .sort((a, b) => a.label.localeCompare(b.label)),
+  };
+}
+
 export async function GET() {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -63,9 +81,7 @@ export async function POST(request: NextRequest) {
       cap: "Accessories",
     };
     const categoryLabel = categoryLabelMap[created.category] ?? created.category;
-    const variantsInStock = created.variants.filter((variant) => variant.stock > 0);
-    const sizesInStock = Array.from(new Set(variantsInStock.map((variant) => variant.size)));
-    const colorsInStock = Array.from(new Set(variantsInStock.map((variant) => variant.color)));
+    const { sizesInStock, colorsInStock } = toStockSummary(created.variants);
     const campaignBody = [
       `We just launched: ${created.name}.`,
       `Category: ${categoryLabel}`,
@@ -77,6 +93,7 @@ export async function POST(request: NextRequest) {
       subscribers.map((subscriber) =>
         sendMarketingCampaignEmail({
           to: subscriber.email,
+          recipientFirstName: subscriber.firstName,
           subject: `New drop: ${created.name}`,
           headline: `${created.name} is now live`,
           body: campaignBody,
@@ -147,9 +164,7 @@ export async function PATCH(request: NextRequest) {
     nextMinPrice < beforeMinPrice
   ) {
     const appBaseUrl = resolveAppBaseUrl();
-    const variantsInStock = updated.variants.filter((variant) => variant.stock > 0);
-    const sizesInStock = Array.from(new Set(variantsInStock.map((variant) => variant.size)));
-    const colorsInStock = Array.from(new Set(variantsInStock.map((variant) => variant.color)));
+    const { sizesInStock, colorsInStock } = toStockSummary(updated.variants);
     const discountAmount = beforeMinPrice - nextMinPrice;
     const bodyText = [
       `${updated.name} just got a price drop.`,
@@ -163,6 +178,7 @@ export async function PATCH(request: NextRequest) {
       subscribers.map((subscriber) =>
         sendMarketingCampaignEmail({
           to: subscriber.email,
+          recipientFirstName: subscriber.firstName,
           subject: `Price drop: ${updated.name}`,
           headline: `${updated.name} is now discounted`,
           body: bodyText,

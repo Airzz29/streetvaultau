@@ -6,7 +6,11 @@ function normalizeUrl(value: string) {
 
 export function resolveAppBaseUrl(request?: NextRequest) {
   const fromEnv =
-    process.env.APP_URL ?? process.env.NEXT_PUBLIC_SITE_URL ?? process.env.SITE_URL ?? "";
+    process.env.APP_URL ??
+    process.env.NEXT_PUBLIC_SITE_URL ??
+    process.env.SITE_URL ??
+    process.env.RENDER_EXTERNAL_URL ??
+    "";
   if (fromEnv.trim()) {
     return normalizeUrl(fromEnv.trim());
   }
