@@ -79,7 +79,6 @@ export default function CheckoutPage() {
     phone: "",
     isDefault: false,
   });
-  const [addressLookup, setAddressLookup] = useState("");
   const [addressSuggestions, setAddressSuggestions] = useState<AddressSuggestion[]>([]);
   const [lookupLoading, setLookupLoading] = useState(false);
 
@@ -109,7 +108,7 @@ export default function CheckoutPage() {
   }, []);
 
   useEffect(() => {
-    const query = addressLookup.trim();
+    const query = newAddress.addressLine1.trim();
     if (query.length < 3) {
       setAddressSuggestions([]);
       setLookupLoading(false);
@@ -138,7 +137,7 @@ export default function CheckoutPage() {
       active = false;
       globalThis.clearTimeout(timer);
     };
-  }, [addressLookup]);
+  }, [newAddress.addressLine1]);
 
   const saveAddress = async () => {
     if (!newAddress.phone.trim()) {
@@ -172,7 +171,6 @@ export default function CheckoutPage() {
       postcode: suggestion.postcode || value.postcode,
       country: AUSTRALIA_LABEL,
     }));
-    setAddressLookup(suggestion.label);
     setAddressSuggestions([]);
   };
 
@@ -352,7 +350,7 @@ export default function CheckoutPage() {
             <input value={newAddress.lastName} onChange={(e) => setNewAddress((v) => ({ ...v, lastName: e.target.value }))} placeholder="Last name" autoComplete="family-name" name="lastName" className="min-h-12 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base" />
             <input value={newAddress.phone} onChange={(e) => setNewAddress((v) => ({ ...v, phone: e.target.value }))} placeholder="Mobile number (required)" autoComplete="tel-national" inputMode="tel" name="phone" className="min-h-12 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base sm:col-span-2" />
             <div className="relative sm:col-span-2">
-              <input value={addressLookup} onChange={(e) => setAddressLookup(e.target.value)} placeholder="Start typing your address (e.g. 2 Songbird Link)" autoComplete="street-address" className="min-h-12 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base" />
+              <input value={newAddress.addressLine1} onChange={(e) => setNewAddress((v) => ({ ...v, addressLine1: e.target.value }))} placeholder="Address line 1" autoComplete="street-address" name="addressLine1" className="min-h-12 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base" />
               {lookupLoading ? <p className="mt-1 text-xs text-zinc-400">Looking up addresses...</p> : null}
               {addressSuggestions.length ? (
                 <div className="absolute z-20 mt-1 max-h-64 w-full overflow-auto rounded-lg border border-white/10 bg-zinc-950/95 p-1 shadow-2xl">
@@ -369,7 +367,6 @@ export default function CheckoutPage() {
                 </div>
               ) : null}
             </div>
-            <input value={newAddress.addressLine1} onChange={(e) => setNewAddress((v) => ({ ...v, addressLine1: e.target.value }))} placeholder="Address line 1" autoComplete="address-line1" name="addressLine1" className="min-h-12 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base sm:col-span-2" />
             <input value={newAddress.addressLine2} onChange={(e) => setNewAddress((v) => ({ ...v, addressLine2: e.target.value }))} placeholder="Address line 2 (optional)" autoComplete="address-line2" name="addressLine2" className="min-h-12 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base sm:col-span-2" />
             <input value={newAddress.city} onChange={(e) => setNewAddress((v) => ({ ...v, city: e.target.value }))} placeholder="Suburb / City" autoComplete="address-level2" name="city" className="min-h-12 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base" />
             <input value={newAddress.stateRegion} onChange={(e) => setNewAddress((v) => ({ ...v, stateRegion: e.target.value.toUpperCase() }))} placeholder="State" autoComplete="address-level1" name="stateRegion" className="min-h-12 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base" />

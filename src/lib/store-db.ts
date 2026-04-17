@@ -312,6 +312,24 @@ function init() {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS user_cart_items (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      product_id TEXT NOT NULL,
+      variant_id TEXT NOT NULL,
+      size TEXT NOT NULL,
+      color TEXT NOT NULL,
+      name TEXT NOT NULL,
+      image TEXT NOT NULL,
+      unit_price REAL NOT NULL,
+      shipping_rate_aud REAL NOT NULL DEFAULT 0,
+      quantity INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE(user_id, variant_id),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS auth_sessions (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
@@ -483,6 +501,7 @@ function init() {
     CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_last_seen ON auth_sessions(user_id, last_seen_at);
     CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires_last_seen ON auth_sessions(expires_at, last_seen_at);
     CREATE INDEX IF NOT EXISTS idx_user_addresses_user_id_default ON user_addresses(user_id, is_default);
+    CREATE INDEX IF NOT EXISTS idx_user_cart_items_user_id_updated ON user_cart_items(user_id, updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_discount_usage_code_id ON discount_code_usage(discount_code_id);
     CREATE INDEX IF NOT EXISTS idx_product_reviews_product_id_status_created ON product_reviews(product_id, status, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_product_reviews_user_id_created ON product_reviews(user_id, created_at DESC);
@@ -2603,6 +2622,74 @@ export function updateUserAddress(
     );
   })();
   return listUserAddresses(userId);
+}
+
+export function listUserCartItems(userId: string): CartItem[] {
+  const rows = db
+    .prepare(
+      `SELECT product_id, variant_id, size, color, name, image, unit_price, shipping_rate_aud, quantity
+       FROM user_cart_items
+       WHERE user_id=?
+       ORDER BY updated_at DESC`
+    )
+    .all(userId) as Array<{
+    product_id: string;
+    variant_id: string;
+    size: string;
+    color: string;
+    name: string;
+    image: string;
+    unit_price: number;
+    shipping_rate_aud: number;
+    quantity: number;
+  }>;
+  return rows.map((row) => ({
+    productId: row.product_id,
+    variantId: row.variant_id,
+    size: row.size,
+    color: row.color,
+    name: row.name,
+    image: row.image,
+    unitPrice: row.unit_price,
+    shippingRateAUD: row.shipping_rate_aud ?? 0,
+    quantity: row.quantity,
+  }));
+}
+
+export function replaceUserCart(userId: string, items: CartItem[]) {
+  const now = nowISO();
+  db.transaction(() => {
+    db.prepare("DELETE FROM user_cart_items WHERE user_id=?").run(userId);
+    if (!items.length) return;
+    const insert = db.prepare(
+      `INSERT INTO user_cart_items (
+        id,user_id,product_id,variant_id,size,color,name,image,unit_price,shipping_rate_aud,quantity,created_at,updated_at
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
+    );
+    for (const item of items) {
+      if (!item.variantId || item.quantity <= 0) continue;
+      insert.run(
+        crypto.randomUUID(),
+        userId,
+        item.productId,
+        item.variantId,
+        item.size,
+        item.color,
+        item.name,
+        item.image,
+        item.unitPrice,
+        item.shippingRateAUD ?? 0,
+        item.quantity,
+        now,
+        now
+      );
+    }
+  })();
+  return listUserCartItems(userId);
+}
+
+export function clearUserCart(userId: string) {
+  db.prepare("DELETE FROM user_cart_items WHERE user_id=?").run(userId);
 }
 
 export function listDiscountCodes() {

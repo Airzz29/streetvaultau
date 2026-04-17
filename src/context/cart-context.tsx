@@ -6,6 +6,7 @@ import {
   useEffect,
   useContext,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { CartItem } from "@/types/product";
@@ -24,10 +25,40 @@ type CartContextValue = {
 
 const CartContext = createContext<CartContextValue | null>(null);
 
+function normalizeItems(items: CartItem[]) {
+  return items
+    .filter((item) => item.variantId && item.productId && item.quantity > 0)
+    .map((item) => ({
+      ...item,
+      quantity: Math.max(1, Math.floor(item.quantity)),
+      shippingRateAUD: item.shippingRateAUD ?? 0,
+    }));
+}
+
+function mergeCartItems(localItems: CartItem[], accountItems: CartItem[]) {
+  const merged = new Map<string, CartItem>();
+  for (const item of [...accountItems, ...localItems]) {
+    const existing = merged.get(item.variantId);
+    if (!existing) {
+      merged.set(item.variantId, { ...item });
+      continue;
+    }
+    merged.set(item.variantId, {
+      ...existing,
+      quantity: existing.quantity + item.quantity,
+    });
+  }
+  return Array.from(merged.values());
+}
+
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [storageReady, setStorageReady] = useState(false);
   const [recentAdd, setRecentAdd] = useState<CartItem | null>(null);
+  const [accountSyncReady, setAccountSyncReady] = useState(false);
+  const [accountUserId, setAccountUserId] = useState<string | null>(null);
+  const skipNextSync = useRef(false);
+  const localItemsAtBootRef = useRef<CartItem[]>([]);
 
   useEffect(() => {
     const raw =
@@ -35,13 +66,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
       window.localStorage.getItem("qadir-cart-v2");
     if (raw) {
       try {
-        setItems(
-          (JSON.parse(raw) as CartItem[]).map((item) => ({
-            ...item,
-            shippingRateAUD: item.shippingRateAUD ?? 0,
-          }))
-        );
+        const parsed = (JSON.parse(raw) as CartItem[]).map((item) => ({
+          ...item,
+          shippingRateAUD: item.shippingRateAUD ?? 0,
+        }));
+        localItemsAtBootRef.current = parsed;
+        setItems(parsed);
       } catch {
+        localItemsAtBootRef.current = [];
         setItems([]);
       }
     }
@@ -52,6 +84,70 @@ export function CartProvider({ children }: { children: ReactNode }) {
     if (!storageReady) return;
     window.localStorage.setItem("streetvault-cart-v3", JSON.stringify(items));
   }, [items, storageReady]);
+
+  useEffect(() => {
+    let active = true;
+    const loadAccountCart = async () => {
+      try {
+        const meResponse = await fetch("/api/auth/me", { cache: "no-store" });
+        const meData = (await meResponse.json()) as { user?: { id: string } | null };
+        const userId = meData.user?.id ?? null;
+        if (!active) return;
+        setAccountUserId(userId);
+        if (!userId) {
+          setAccountSyncReady(true);
+          return;
+        }
+        const cartResponse = await fetch("/api/account/cart", { cache: "no-store" });
+        if (!cartResponse.ok) {
+          setAccountSyncReady(true);
+          return;
+        }
+        const cartData = (await cartResponse.json()) as { items?: CartItem[] };
+        if (!active) return;
+        const merged = normalizeItems(
+          mergeCartItems(localItemsAtBootRef.current, cartData.items ?? [])
+        );
+        skipNextSync.current = true;
+        setItems(merged);
+        await fetch("/api/account/cart", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items: merged }),
+        });
+      } catch {
+        // Keep local cart experience even if account sync fails.
+      } finally {
+        if (active) {
+          setAccountSyncReady(true);
+        }
+      }
+    };
+    if (storageReady) {
+      loadAccountCart();
+    }
+    return () => {
+      active = false;
+    };
+  }, [storageReady]);
+
+  useEffect(() => {
+    if (!storageReady || !accountSyncReady || !accountUserId) return;
+    if (skipNextSync.current) {
+      skipNextSync.current = false;
+      return;
+    }
+    const timer = globalThis.setTimeout(() => {
+      fetch("/api/account/cart", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: normalizeItems(items) }),
+      }).catch(() => {
+        // Non-blocking: local cart still works.
+      });
+    }, 180);
+    return () => globalThis.clearTimeout(timer);
+  }, [accountSyncReady, accountUserId, items, storageReady]);
 
   const addItem = (incomingItem: CartItem) => {
     setRecentAdd(incomingItem);
@@ -69,7 +165,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         return updated;
       }
 
-      return [...currentItems, incomingItem];
+      return [...currentItems, { ...incomingItem, shippingRateAUD: incomingItem.shippingRateAUD ?? 0 }];
     });
   };
 
@@ -96,7 +192,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
     );
   };
 
-  const clearCart = () => setItems([]);
+  const clearCart = () => {
+    setItems([]);
+    if (accountUserId) {
+      fetch("/api/account/cart", { method: "DELETE" }).catch(() => {
+        // Keep local clear even if API is unavailable.
+      });
+    }
+  };
   const dismissRecentAdd = () => setRecentAdd(null);
 
   const totalItems = useMemo(
