@@ -42,6 +42,7 @@ export default function AdminPremadeFitsPage() {
   const [message, setMessage] = useState("");
   const [picker, setPicker] = useState<{ slot: PremadeFitItemSlot; itemId?: string } | null>(null);
   const [pickerSearch, setPickerSearch] = useState("");
+  const [bottomTypeFilter, setBottomTypeFilter] = useState<"all" | "joggers" | "jeans" | "shorts">("all");
   const [form, setForm] = useState({
     name: "",
     slug: "",
@@ -218,11 +219,22 @@ export default function AdminPremadeFitsPage() {
   const pickerResults = useMemo(() => {
     if (!picker) return [];
     const needle = pickerSearch.trim().toLowerCase();
-    return productsForSlot[picker.slot].filter((product) => {
-      if (!needle) return true;
-      return `${product.name} ${product.brand ?? ""}`.toLowerCase().includes(needle);
-    });
-  }, [picker, pickerSearch, productsForSlot]);
+    return productsForSlot[picker.slot]
+      .filter((product) => {
+        if (!needle) return true;
+        return `${product.name} ${product.brand ?? ""}`.toLowerCase().includes(needle);
+      })
+      .filter((product) => {
+        if (picker.slot !== "pants" || bottomTypeFilter === "all") return true;
+        const type = (product.productType ?? "").toLowerCase();
+        if (bottomTypeFilter === "joggers") {
+          return type.includes("joggers") || type.includes("pants");
+        }
+        if (bottomTypeFilter === "jeans") return type.includes("jeans");
+        if (bottomTypeFilter === "shorts") return type.includes("shorts");
+        return true;
+      });
+  }, [bottomTypeFilter, picker, pickerSearch, productsForSlot]);
 
   const assignProductToItem = (slot: PremadeFitItemSlot, productId: string, itemId?: string) => {
     if (itemId) {
@@ -402,9 +414,11 @@ export default function AdminPremadeFitsPage() {
                             setItems((prev) => [...prev, created]);
                             setPicker({ slot: slotMeta.slot, itemId: created.id });
                             setPickerSearch("");
+                            setBottomTypeFilter("all");
                           } else {
                             setPicker({ slot: slotMeta.slot });
                             setPickerSearch("");
+                            setBottomTypeFilter("all");
                           }
                         }
                       }}
@@ -451,6 +465,7 @@ export default function AdminPremadeFitsPage() {
                   onClick={() => {
                     setPicker({ slot: item.slot, itemId: item.id });
                     setPickerSearch("");
+                    setBottomTypeFilter("all");
                   }}
                   className="min-h-10 rounded-lg border border-white/20 bg-black/40 px-2 text-left text-xs text-zinc-100 hover:bg-white/10"
                 >
@@ -677,7 +692,10 @@ export default function AdminPremadeFitsPage() {
               </p>
               <button
                 type="button"
-                onClick={() => setPicker(null)}
+                onClick={() => {
+                  setPicker(null);
+                  setBottomTypeFilter("all");
+                }}
                 className="rounded border border-white/20 px-2 py-1 text-xs"
               >
                 Close
@@ -689,6 +707,29 @@ export default function AdminPremadeFitsPage() {
               placeholder="Search by product name or brand"
               className="mb-3 min-h-10 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-sm"
             />
+            {picker.slot === "pants" ? (
+              <div className="mb-3 flex flex-wrap gap-2">
+                {[
+                  { id: "all", label: "All bottoms" },
+                  { id: "joggers", label: "Joggers / Pants" },
+                  { id: "jeans", label: "Jeans" },
+                  { id: "shorts", label: "Shorts" },
+                ].map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => setBottomTypeFilter(option.id as typeof bottomTypeFilter)}
+                    className={`rounded-lg border px-3 py-1.5 text-xs ${
+                      bottomTypeFilter === option.id
+                        ? "border-zinc-100 bg-zinc-100 text-zinc-900"
+                        : "border-white/20 text-zinc-300 hover:bg-white/10"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
             <div className="grid max-h-[65vh] gap-3 overflow-y-auto sm:grid-cols-2 lg:grid-cols-3">
               {pickerResults.map((product) => (
                 <button
