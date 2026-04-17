@@ -388,17 +388,37 @@ export default function AdminProductsRoute() {
           <input value={form.brand} onChange={(e) => setForm((v) => ({ ...v, brand: e.target.value }))} placeholder="Brand" className="min-h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm" />
           <input value={form.collection} onChange={(e) => setForm((v) => ({ ...v, collection: e.target.value }))} placeholder="Collection" className="min-h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm" />
           {form.category === "pants" ? (
-            <select
-              value={bottomsTypeOptions.includes(form.productType) ? form.productType : "Joggers"}
-              onChange={(e) => setForm((v) => ({ ...v, productType: e.target.value }))}
-              className="min-h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm sm:col-span-2"
-            >
-              {bottomsTypeOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
+            <div className="rounded-lg border border-white/15 bg-black/30 p-3 sm:col-span-2">
+              <p className="mb-2 text-xs uppercase tracking-[0.12em] text-zinc-400">
+                Bottom type (choose one)
+              </p>
+              <div className="grid gap-2 sm:grid-cols-3">
+                {bottomsTypeOptions.map((option) => {
+                  const checked =
+                    (bottomsTypeOptions.includes(form.productType)
+                      ? form.productType
+                      : "Joggers") === option;
+                  return (
+                    <label
+                      key={option}
+                      className={`flex min-h-10 items-center gap-2 rounded-md border px-3 text-sm transition ${
+                        checked
+                          ? "border-zinc-100 bg-zinc-100/10 text-zinc-100"
+                          : "border-white/20 text-zinc-300 hover:bg-white/5"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => setForm((v) => ({ ...v, productType: option }))}
+                        className="h-4 w-4"
+                      />
+                      {option}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
           ) : (
             <input value={form.productType} onChange={(e) => setForm((v) => ({ ...v, productType: e.target.value }))} placeholder="Product type (e.g. Zip-up Hoodie, Sneakers)" className="min-h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm sm:col-span-2" />
           )}

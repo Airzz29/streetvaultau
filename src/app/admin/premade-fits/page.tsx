@@ -442,35 +442,20 @@ export default function AdminPremadeFitsPage() {
                       </p>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPicker({ slot: item.slot, itemId: item.id });
-                      setPickerSearch("");
-                    }}
-                    className="rounded border border-white/20 px-2 py-1 text-xs hover:bg-white/10"
-                  >
-                    Change
-                  </button>
+                  <span className="rounded border border-white/15 px-2 py-1 text-[11px] text-zinc-400">
+                    Use the Select product button below
+                  </span>
                 </div>
-                <select
-                  value={item.productId}
-                  onChange={(event) =>
-                    setItems((prev) =>
-                      prev.map((entry) =>
-                        entry.id === item.id ? { ...entry, productId: event.target.value } : entry
-                      )
-                    )
-                  }
-                  className="min-h-10 rounded-lg border border-white/15 bg-black/40 px-2 text-xs"
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPicker({ slot: item.slot, itemId: item.id });
+                    setPickerSearch("");
+                  }}
+                  className="min-h-10 rounded-lg border border-white/20 bg-black/40 px-2 text-left text-xs text-zinc-100 hover:bg-white/10"
                 >
-                  <option value="">Select product</option>
-                  {products.map((entry) => (
-                    <option key={entry.id} value={entry.id}>
-                      {entry.name}
-                    </option>
-                  ))}
-                </select>
+                  {product ? `Change product: ${product.name}` : "Select product"}
+                </button>
                 <label className="flex items-center gap-2 rounded-lg border border-white/15 bg-black/40 px-2 py-2 text-xs">
                   <input
                     type="checkbox"
