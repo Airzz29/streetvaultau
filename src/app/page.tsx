@@ -108,9 +108,14 @@ export default function Home() {
       <section className="space-y-4 fade-slide-up">
         <div className="flex items-end justify-between">
           <h2 className="text-2xl font-semibold sm:text-3xl">Build Your Fit</h2>
-          <Link href="/outfit-builder" className="text-sm text-zinc-300 hover:text-zinc-100">
-            Full Builder Page
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link href="/premade-fits" className="rounded-lg border border-emerald-300/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/20">
+              Browse Premade Fits
+            </Link>
+            <Link href="/outfit-builder" className="text-sm text-zinc-300 hover:text-zinc-100">
+              Full Builder Page
+            </Link>
+          </div>
         </div>
         <OutfitBuilderExperience products={richProducts} compact />
         <p className="text-xs text-zinc-400">Express shipping: Australia only (1-3 days).</p>

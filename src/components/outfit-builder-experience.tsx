@@ -415,13 +415,13 @@ export function OutfitBuilderExperience({
                   ) : (
                     <div className="text-xs text-zinc-500">No item selected</div>
                   )}
-                  {slot === "accessory" ? (
+                  {slot === "accessory" || slot === "shoes" ? (
                     <button
                       type="button"
                       onClick={() =>
                         setSelection((prev) => ({
                           ...prev,
-                          accessory: { productId: "", color: "" },
+                          [slot]: { productId: "", color: "" },
                         }))
                       }
                       className="rounded border border-white/20 px-2 py-1 text-xs text-zinc-300"

@@ -1,12 +1,14 @@
 "use client";
 
 import Image from "next/image";
-import { ChangeEvent, FormEvent, useEffect, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import { ProductWithVariants } from "@/types/product";
-import { PremadeFit } from "@/types/premade-fit";
+import { PremadeFit, PremadeFitItemSlot } from "@/types/premade-fit";
 
 type FitItemForm = {
   id: string;
+  slot: PremadeFitItemSlot;
+  isOptional: boolean;
   productId: string;
   itemMainImage: string;
   selectionMode: "fixed" | "selectable";
@@ -15,6 +17,14 @@ type FitItemForm = {
   defaultVariantId: string;
   sortOrder: number;
 };
+
+const FIT_SLOT_META: Array<{ slot: PremadeFitItemSlot; label: string; required: boolean; multi: boolean }> = [
+  { slot: "top", label: "Top (Shirt)", required: false, multi: false },
+  { slot: "hoodie", label: "Hoodie", required: false, multi: false },
+  { slot: "pants", label: "Pants", required: true, multi: false },
+  { slot: "shoes", label: "Shoes", required: false, multi: false },
+  { slot: "accessory", label: "Accessories", required: false, multi: true },
+];
 
 function toSlug(input: string) {
   return input
@@ -30,6 +40,8 @@ export default function AdminPremadeFitsPage() {
   const [products, setProducts] = useState<ProductWithVariants[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
+  const [picker, setPicker] = useState<{ slot: PremadeFitItemSlot; itemId?: string } | null>(null);
+  const [pickerSearch, setPickerSearch] = useState("");
   const [form, setForm] = useState({
     name: "",
     slug: "",
@@ -42,6 +54,8 @@ export default function AdminPremadeFitsPage() {
   const [items, setItems] = useState<FitItemForm[]>([
     {
       id: crypto.randomUUID(),
+      slot: "top",
+      isOptional: false,
       productId: "",
       itemMainImage: "",
       selectionMode: "fixed",
@@ -49,6 +63,18 @@ export default function AdminPremadeFitsPage() {
       allowedSizes: "",
       defaultVariantId: "",
       sortOrder: 0,
+    },
+    {
+      id: crypto.randomUUID(),
+      slot: "pants",
+      isOptional: false,
+      productId: "",
+      itemMainImage: "",
+      selectionMode: "fixed",
+      allowedColors: "",
+      allowedSizes: "",
+      defaultVariantId: "",
+      sortOrder: 1,
     },
   ]);
 
@@ -134,6 +160,8 @@ export default function AdminPremadeFitsPage() {
     setItems([
       {
         id: crypto.randomUUID(),
+        slot: "top",
+        isOptional: false,
         productId: "",
         itemMainImage: "",
         selectionMode: "fixed",
@@ -142,7 +170,77 @@ export default function AdminPremadeFitsPage() {
         defaultVariantId: "",
         sortOrder: 0,
       },
+      {
+        id: crypto.randomUUID(),
+        slot: "pants",
+        isOptional: false,
+        productId: "",
+        itemMainImage: "",
+        selectionMode: "fixed",
+        allowedColors: "",
+        allowedSizes: "",
+        defaultVariantId: "",
+        sortOrder: 1,
+      },
     ]);
+  };
+
+  const createEmptyItem = (slot: PremadeFitItemSlot): FitItemForm => ({
+    id: crypto.randomUUID(),
+    slot,
+    isOptional: slot === "shoes" || slot === "accessory" || slot === "hoodie",
+    productId: "",
+    itemMainImage: "",
+    selectionMode: "fixed",
+    allowedColors: "",
+    allowedSizes: "",
+    defaultVariantId: "",
+    sortOrder: items.length,
+  });
+
+  const productsForSlot = useMemo(() => {
+    const bySlot: Record<PremadeFitItemSlot, ProductWithVariants[]> = {
+      top: products.filter((product) => product.category === "tee"),
+      hoodie: products.filter((product) => product.category === "hoodie"),
+      pants: products.filter(
+        (product) =>
+          product.category === "pants" &&
+          ["shorts", "jeans", "joggers", "pants"].some((token) =>
+            (product.productType ?? "pants").toLowerCase().includes(token)
+          )
+      ),
+      shoes: products.filter((product) => product.category === "shoes"),
+      accessory: products.filter((product) => ["accessory", "cap"].includes(product.category)),
+    };
+    return bySlot;
+  }, [products]);
+
+  const pickerResults = useMemo(() => {
+    if (!picker) return [];
+    const needle = pickerSearch.trim().toLowerCase();
+    return productsForSlot[picker.slot].filter((product) => {
+      if (!needle) return true;
+      return `${product.name} ${product.brand ?? ""}`.toLowerCase().includes(needle);
+    });
+  }, [picker, pickerSearch, productsForSlot]);
+
+  const assignProductToItem = (slot: PremadeFitItemSlot, productId: string, itemId?: string) => {
+    if (itemId) {
+      setItems((prev) =>
+        prev.map((entry) => (entry.id === itemId ? { ...entry, productId } : entry))
+      );
+      return;
+    }
+    const existingSingle = items.find((entry) => entry.slot === slot);
+    if (slot !== "accessory" && existingSingle) {
+      setItems((prev) =>
+        prev.map((entry) =>
+          entry.id === existingSingle.id ? { ...entry, productId } : entry
+        )
+      );
+      return;
+    }
+    setItems((prev) => [...prev, { ...createEmptyItem(slot), productId }]);
   };
 
   const onSubmit = async (event: FormEvent) => {
@@ -164,6 +262,8 @@ export default function AdminPremadeFitsPage() {
       items: items
         .filter((item) => item.productId)
         .map((item, index) => ({
+          slot: item.slot,
+          isOptional: item.isOptional,
           productId: item.productId,
           selectionMode: item.selectionMode,
           allowedColors: item.allowedColors
@@ -279,35 +379,80 @@ export default function AdminPremadeFitsPage() {
           </label>
         </div>
 
-        <div className="space-y-2 rounded-xl border border-white/10 bg-black/20 p-3">
-          <div className="flex items-center justify-between">
-            <p className="text-xs uppercase tracking-[0.14em] text-zinc-400">Included Products</p>
-            <button
-              type="button"
-              onClick={() =>
-                setItems((prev) => [
-                  ...prev,
-                  {
-                    id: crypto.randomUUID(),
-                    productId: "",
-                    itemMainImage: "",
-                    selectionMode: "fixed",
-                    allowedColors: "",
-                    allowedSizes: "",
-                    defaultVariantId: "",
-                    sortOrder: prev.length,
-                  },
-                ])
-              }
-              className="rounded border border-white/20 px-2 py-1 text-xs hover:bg-white/10"
-            >
-              Add Item
-            </button>
-          </div>
-          {items.map((item, index) => {
-            const product = products.find((entry) => entry.id === item.productId);
+        <div className="space-y-3 rounded-xl border border-white/10 bg-black/20 p-3">
+          <p className="text-xs uppercase tracking-[0.14em] text-zinc-400">Structured Outfit Composition</p>
+          {FIT_SLOT_META.map((slotMeta) => {
+            const sectionItems = items.filter((entry) => entry.slot === slotMeta.slot);
             return (
-              <div key={item.id} className="grid gap-2 rounded-lg border border-white/10 bg-black/30 p-2 sm:grid-cols-2">
+              <div key={slotMeta.slot} className="space-y-2 rounded-xl border border-white/10 bg-black/25 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold">
+                    {slotMeta.label}{" "}
+                    <span className="text-xs font-normal text-zinc-400">
+                      {slotMeta.required ? "(required)" : "(optional)"}
+                    </span>
+                  </p>
+                  {slotMeta.multi || sectionItems.length === 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (slotMeta.multi || sectionItems.length === 0) {
+                          if (slotMeta.multi) {
+                            const created = createEmptyItem(slotMeta.slot);
+                            setItems((prev) => [...prev, created]);
+                            setPicker({ slot: slotMeta.slot, itemId: created.id });
+                            setPickerSearch("");
+                          } else {
+                            setPicker({ slot: slotMeta.slot });
+                            setPickerSearch("");
+                          }
+                        }
+                      }}
+                      className="rounded border border-white/20 px-2 py-1 text-xs hover:bg-white/10"
+                    >
+                      Select {slotMeta.label}
+                    </button>
+                  ) : null}
+                </div>
+                {sectionItems.length === 0 ? (
+                  <p className="text-xs text-zinc-500">No product assigned yet.</p>
+                ) : null}
+                {sectionItems.map((item, index) => {
+                  const product = products.find((entry) => entry.id === item.productId);
+                  return (
+                    <div key={item.id} className="grid gap-2 rounded-lg border border-white/10 bg-black/30 p-2 sm:grid-cols-2">
+                <div className="sm:col-span-2 flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-black/25 p-2">
+                  <div className="flex items-center gap-2">
+                    <div className="relative h-12 w-12 overflow-hidden rounded border border-white/10 bg-black/30">
+                      {product ? (
+                        <Image
+                          src={item.itemMainImage || product.mainImage || product.images[0]}
+                          alt={product.name}
+                          fill
+                          sizes="48px"
+                          className="object-cover"
+                        />
+                      ) : null}
+                    </div>
+                    <div className="text-xs text-zinc-300">
+                      <p className="font-semibold">{product?.name ?? "No product selected"}</p>
+                      <p className="text-zinc-500">
+                        {product?.brand ?? "StreetVault"} · {product?.category ?? "N/A"} ·{" "}
+                        {product?.productType ?? "N/A"}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPicker({ slot: item.slot, itemId: item.id });
+                      setPickerSearch("");
+                    }}
+                    className="rounded border border-white/20 px-2 py-1 text-xs hover:bg-white/10"
+                  >
+                    Change
+                  </button>
+                </div>
                 <select
                   value={item.productId}
                   onChange={(event) =>
@@ -326,6 +471,20 @@ export default function AdminPremadeFitsPage() {
                     </option>
                   ))}
                 </select>
+                <label className="flex items-center gap-2 rounded-lg border border-white/15 bg-black/40 px-2 py-2 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={item.isOptional}
+                    onChange={(event) =>
+                      setItems((prev) =>
+                        prev.map((entry) =>
+                          entry.id === item.id ? { ...entry, isOptional: event.target.checked } : entry
+                        )
+                      )
+                    }
+                  />
+                  Customer can skip this item
+                </label>
                 <select
                   value={item.selectionMode}
                   onChange={(event) =>
@@ -425,7 +584,7 @@ export default function AdminPremadeFitsPage() {
                   ))}
                 </select>
                 <div className="sm:col-span-2 flex items-center justify-between">
-                  <p className="text-xs text-zinc-500">Order #{index + 1}</p>
+                  <p className="text-xs text-zinc-500">Order #{index + 1} in {slotMeta.label}</p>
                   <button
                     type="button"
                     onClick={() => setItems((prev) => prev.filter((entry) => entry.id !== item.id))}
@@ -434,6 +593,9 @@ export default function AdminPremadeFitsPage() {
                     Remove
                   </button>
                 </div>
+                    </div>
+                  );
+                })}
               </div>
             );
           })}
@@ -484,6 +646,8 @@ export default function AdminPremadeFitsPage() {
                     setItems(
                       fit.items.map((item, index) => ({
                         id: item.id,
+                        slot: item.slot,
+                        isOptional: item.isOptional,
                         productId: item.productId,
                         itemMainImage: item.itemMainImage ?? "",
                         selectionMode: item.selectionMode,
@@ -519,6 +683,57 @@ export default function AdminPremadeFitsPage() {
           </article>
         ))}
       </div>
+      {picker ? (
+        <div className="fixed inset-0 z-[100] grid place-items-center bg-black/75 p-3">
+          <div className="w-full max-w-4xl rounded-2xl border border-white/15 bg-zinc-950 p-4">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <p className="text-sm font-semibold">
+                Select {FIT_SLOT_META.find((entry) => entry.slot === picker.slot)?.label ?? "Item"}
+              </p>
+              <button
+                type="button"
+                onClick={() => setPicker(null)}
+                className="rounded border border-white/20 px-2 py-1 text-xs"
+              >
+                Close
+              </button>
+            </div>
+            <input
+              value={pickerSearch}
+              onChange={(event) => setPickerSearch(event.target.value)}
+              placeholder="Search by product name or brand"
+              className="mb-3 min-h-10 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-sm"
+            />
+            <div className="grid max-h-[65vh] gap-3 overflow-y-auto sm:grid-cols-2 lg:grid-cols-3">
+              {pickerResults.map((product) => (
+                <button
+                  key={product.id}
+                  type="button"
+                  onClick={() => {
+                    assignProductToItem(picker.slot, product.id, picker.itemId);
+                    setPicker(null);
+                  }}
+                  className="rounded-xl border border-white/15 bg-black/30 p-2 text-left hover:bg-white/10"
+                >
+                  <div className="relative h-28 overflow-hidden rounded border border-white/10">
+                    <Image
+                      src={product.mainImage ?? product.images[0]}
+                      alt={product.name}
+                      fill
+                      sizes="320px"
+                      className="object-cover"
+                    />
+                  </div>
+                  <p className="mt-2 text-sm font-semibold">{product.name}</p>
+                  <p className="text-xs text-zinc-400">
+                    {product.brand ?? "StreetVault"} · {product.category} · {product.productType ?? "N/A"}
+                  </p>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

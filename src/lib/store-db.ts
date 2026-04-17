@@ -13,7 +13,7 @@ import {
   ProductWithVariants,
 } from "@/types/product";
 import { Order, OrderStatus } from "@/types/order";
-import { PremadeFit, PremadeFitCard, PremadeFitSelectionMode } from "@/types/premade-fit";
+import { PremadeFit, PremadeFitCard, PremadeFitItemSlot, PremadeFitSelectionMode } from "@/types/premade-fit";
 
 type DbProductRow = {
   id: string;
@@ -74,6 +74,8 @@ type DbPremadeFitRow = {
 type DbPremadeFitItemRow = {
   id: string;
   fit_id: string;
+  slot: PremadeFitItemSlot;
+  is_optional: number;
   product_id: string;
   item_main_image: string | null;
   selection_mode: PremadeFitSelectionMode;
@@ -186,6 +188,8 @@ function init() {
     CREATE TABLE IF NOT EXISTS premade_fit_items (
       id TEXT PRIMARY KEY,
       fit_id TEXT NOT NULL,
+      slot TEXT NOT NULL DEFAULT 'top',
+      is_optional INTEGER NOT NULL DEFAULT 0,
       product_id TEXT NOT NULL,
       item_main_image TEXT,
       selection_mode TEXT NOT NULL DEFAULT 'fixed',
@@ -483,6 +487,8 @@ function init() {
   addColumnIfMissing("users", "last_active_at TEXT", "last_active_at");
   addColumnIfMissing("contact_messages", "source_type TEXT NOT NULL DEFAULT 'general'", "source_type");
   addColumnIfMissing("contact_messages", "order_id TEXT", "order_id");
+  addColumnIfMissing("premade_fit_items", "slot TEXT NOT NULL DEFAULT 'top'", "slot");
+  addColumnIfMissing("premade_fit_items", "is_optional INTEGER NOT NULL DEFAULT 0", "is_optional");
   addColumnIfMissing("premade_fit_items", "item_main_image TEXT", "item_main_image");
 
   db.prepare(
@@ -661,7 +667,7 @@ export function listProductsWithVariants(): ProductWithVariants[] {
 export function listProductsForCards(): ProductCardData[] {
   const rows = db
     .prepare(
-      `SELECT p.id,p.slug,p.name,p.category,p.compare_at_price,p.tags_json,p.images_json,p.main_image,p.builder_image,
+      `SELECT p.id,p.slug,p.name,p.product_type,p.category,p.compare_at_price,p.tags_json,p.images_json,p.main_image,p.builder_image,
               p.brand,
               MIN(v.price) as base_price, MIN(v.stock) as lowest_stock, SUM(v.stock) as total_stock
        FROM products p JOIN variants v ON p.id=v.product_id
@@ -674,6 +680,7 @@ export function listProductsForCards(): ProductCardData[] {
     slug: string;
     name: string;
     brand: string | null;
+    product_type: string | null;
     category: string;
     compare_at_price: number | null;
     tags_json: string;
@@ -686,6 +693,7 @@ export function listProductsForCards(): ProductCardData[] {
   }>;
 
   const sizesByProductId = new Map<string, string[]>();
+  const colorsByProductId = new Map<string, string[]>();
   const sizeRows = db
     .prepare("SELECT product_id, size FROM variants WHERE stock > 0 ORDER BY size ASC")
     .all() as Array<{ product_id: string; size: string }>;
@@ -697,12 +705,24 @@ export function listProductsForCards(): ProductCardData[] {
       sizesByProductId.set(row.product_id, [row.size]);
     }
   }
+  const colorRows = db
+    .prepare("SELECT product_id, color FROM variants WHERE stock > 0 ORDER BY color ASC")
+    .all() as Array<{ product_id: string; color: string }>;
+  for (const row of colorRows) {
+    const existing = colorsByProductId.get(row.product_id);
+    if (existing) {
+      if (!existing.includes(row.color)) existing.push(row.color);
+    } else {
+      colorsByProductId.set(row.product_id, [row.color]);
+    }
+  }
 
   return rows.map((row) => ({
     id: row.id,
     slug: row.slug,
     name: row.name,
     brand: row.brand,
+    productType: row.product_type,
     image: row.main_image ?? (JSON.parse(row.images_json) as string[])[0],
     builderImage: row.builder_image,
     category: row.category as ProductCategory,
@@ -711,6 +731,7 @@ export function listProductsForCards(): ProductCardData[] {
     lowestStock: row.lowest_stock,
     totalStock: row.total_stock,
     availableSizes: sizesByProductId.get(row.id) ?? [],
+    availableColors: colorsByProductId.get(row.id) ?? [],
     tags: JSON.parse(row.tags_json) as ProductTag[],
   }));
 }
@@ -755,7 +776,7 @@ export function listProductsForCardsFiltered(input: {
 
   const rows = db
     .prepare(
-      `SELECT p.id,p.slug,p.name,p.category,p.compare_at_price,p.tags_json,p.images_json,p.main_image,p.builder_image,
+      `SELECT p.id,p.slug,p.name,p.product_type,p.category,p.compare_at_price,p.tags_json,p.images_json,p.main_image,p.builder_image,
               p.brand,
               MIN(v.price) as base_price, MIN(v.stock) as lowest_stock, SUM(v.stock) as total_stock
        FROM products p
@@ -769,6 +790,7 @@ export function listProductsForCardsFiltered(input: {
     slug: string;
     name: string;
     brand: string | null;
+    product_type: string | null;
     category: string;
     compare_at_price: number | null;
     tags_json: string;
@@ -792,6 +814,7 @@ export function listProductsForCardsFiltered(input: {
     )
     .all(...productIds) as Array<{ product_id: string; size: string }>;
   const sizesByProductId = new Map<string, string[]>();
+  const colorsByProductId = new Map<string, string[]>();
   for (const row of sizeRows) {
     const existing = sizesByProductId.get(row.product_id);
     if (existing) {
@@ -800,12 +823,29 @@ export function listProductsForCardsFiltered(input: {
       sizesByProductId.set(row.product_id, [row.size]);
     }
   }
+  const colorRows = db
+    .prepare(
+      `SELECT product_id, color
+       FROM variants
+       WHERE stock > 0 AND product_id IN (${placeholders})
+       ORDER BY color ASC`
+    )
+    .all(...productIds) as Array<{ product_id: string; color: string }>;
+  for (const row of colorRows) {
+    const existing = colorsByProductId.get(row.product_id);
+    if (existing) {
+      if (!existing.includes(row.color)) existing.push(row.color);
+    } else {
+      colorsByProductId.set(row.product_id, [row.color]);
+    }
+  }
 
   return rows.map((row) => ({
     id: row.id,
     slug: row.slug,
     name: row.name,
     brand: row.brand,
+    productType: row.product_type,
     image: row.main_image ?? (JSON.parse(row.images_json) as string[])[0],
     builderImage: row.builder_image,
     category: row.category as ProductCategory,
@@ -814,6 +854,7 @@ export function listProductsForCardsFiltered(input: {
     lowestStock: row.lowest_stock,
     totalStock: row.total_stock,
     availableSizes: sizesByProductId.get(row.id) ?? [],
+    availableColors: colorsByProductId.get(row.id) ?? [],
     tags: JSON.parse(row.tags_json) as ProductTag[],
   }));
 }
@@ -875,7 +916,7 @@ export function listPremadeFits(options?: { includeInactive?: boolean }): Premad
   const fitPlaceholders = fitIds.map(() => "?").join(",");
   const fitItemRows = db
     .prepare(
-      `SELECT id, fit_id, product_id, item_main_image, selection_mode, allowed_colors_json, allowed_sizes_json, default_variant_id, sort_order
+      `SELECT id, fit_id, slot, is_optional, product_id, item_main_image, selection_mode, allowed_colors_json, allowed_sizes_json, default_variant_id, sort_order
        FROM premade_fit_items
        WHERE fit_id IN (${fitPlaceholders})
        ORDER BY sort_order ASC`
@@ -920,6 +961,8 @@ export function listPremadeFits(options?: { includeInactive?: boolean }): Premad
     const entry = {
       id: fitItem.id,
       fitId: fitItem.fit_id,
+      slot: fitItem.slot ?? "top",
+      isOptional: Boolean(fitItem.is_optional),
       productId: product.id,
       productSlug: product.slug,
       productName: product.name,
@@ -1002,6 +1045,8 @@ export function createPremadeFit(input: {
   active: boolean;
   featured: boolean;
   items: Array<{
+    slot: PremadeFitItemSlot;
+    isOptional?: boolean;
     productId: string;
     itemMainImage?: string | null;
     selectionMode: PremadeFitSelectionMode;
@@ -1032,11 +1077,13 @@ export function createPremadeFit(input: {
     for (const item of input.items) {
       db.prepare(
         `INSERT INTO premade_fit_items (
-          id, fit_id, product_id, item_main_image, selection_mode, allowed_colors_json, allowed_sizes_json, default_variant_id, sort_order, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          id, fit_id, slot, is_optional, product_id, item_main_image, selection_mode, allowed_colors_json, allowed_sizes_json, default_variant_id, sort_order, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).run(
         crypto.randomUUID(),
         fitId,
+        item.slot,
+        item.isOptional ? 1 : 0,
         item.productId,
         item.itemMainImage?.trim() || null,
         item.selectionMode,
@@ -1063,6 +1110,8 @@ export function updatePremadeFit(
     active: boolean;
     featured: boolean;
     items: Array<{
+      slot: PremadeFitItemSlot;
+      isOptional?: boolean;
       productId: string;
       itemMainImage?: string | null;
       selectionMode: PremadeFitSelectionMode;
@@ -1094,11 +1143,13 @@ export function updatePremadeFit(
     for (const item of input.items) {
       db.prepare(
         `INSERT INTO premade_fit_items (
-          id, fit_id, product_id, item_main_image, selection_mode, allowed_colors_json, allowed_sizes_json, default_variant_id, sort_order, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          id, fit_id, slot, is_optional, product_id, item_main_image, selection_mode, allowed_colors_json, allowed_sizes_json, default_variant_id, sort_order, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).run(
         crypto.randomUUID(),
         fitId,
+        item.slot,
+        item.isOptional ? 1 : 0,
         item.productId,
         item.itemMainImage?.trim() || null,
         item.selectionMode,

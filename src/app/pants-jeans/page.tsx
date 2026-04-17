@@ -3,8 +3,8 @@ import { CategoryPageContent } from "@/components/category-page-content";
 import { listProductsForCards } from "@/lib/store-db";
 
 export const metadata: Metadata = {
-  title: "Jeans and Pants Australia | StreetVault",
-  description: "Shop premium cargo pants and jeans in Australia from StreetVault.",
+  title: "Pants, Shorts and Jeans Australia | StreetVault",
+  description: "Shop premium joggers, shorts, and jeans in Australia from StreetVault.",
   alternates: { canonical: "/pants-jeans" },
 };
 
@@ -13,9 +13,10 @@ export default function PantsJeansPage() {
 
   return (
     <CategoryPageContent
-      title="Jeans / Pants"
-      subtitle="Tapered cargos and clean utility fits with modern tailoring and premium texture."
+      title="Pants / Shorts / Jeans"
+      subtitle="Baggy joggers, tailored shorts, and clean denim cuts with premium texture."
       products={products}
+      enableBottomsTypeFilter
     />
   );
 }

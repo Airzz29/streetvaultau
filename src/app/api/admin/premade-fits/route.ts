@@ -3,12 +3,15 @@ import { requireAdmin } from "@/lib/auth";
 import {
   createPremadeFit,
   deletePremadeFit,
+  getProductById,
   listPremadeFits,
   updatePremadeFit,
 } from "@/lib/store-db";
-import { PremadeFitSelectionMode } from "@/types/premade-fit";
+import { PremadeFitItemSlot, PremadeFitSelectionMode } from "@/types/premade-fit";
 
 type FitItemInput = {
+  slot?: PremadeFitItemSlot;
+  isOptional?: boolean;
   productId: string;
   itemMainImage?: string | null;
   selectionMode?: PremadeFitSelectionMode;
@@ -33,6 +36,8 @@ type FitBody = {
 function normalizeItems(items: FitItemInput[] = []) {
   return items
     .map((item, index) => ({
+      slot: item.slot ?? "top",
+      isOptional: Boolean(item.isOptional),
       productId: item.productId,
       itemMainImage: item.itemMainImage ?? null,
       selectionMode: item.selectionMode ?? "fixed",
@@ -42,6 +47,47 @@ function normalizeItems(items: FitItemInput[] = []) {
       sortOrder: item.sortOrder ?? index,
     }))
     .filter((item) => item.productId);
+}
+
+function validateStructuredFit(items: ReturnType<typeof normalizeItems>) {
+  const tops = items.filter((item) => item.slot === "top");
+  const hoodies = items.filter((item) => item.slot === "hoodie");
+  const bottoms = items.filter((item) => item.slot === "pants");
+  const shoes = items.filter((item) => item.slot === "shoes");
+  if (tops.length + hoodies.length < 1) return "Premade fit requires at least one upper item (shirt or hoodie).";
+  if (tops.length + hoodies.length > 2) return "Premade fit allows up to two upper items (shirt + hoodie).";
+  if (tops.length > 1 || hoodies.length > 1) return "Only one shirt and one hoodie can be included.";
+  if (bottoms.length !== 1) return "Premade fit requires exactly one bottom item.";
+  if (shoes.length > 1) return "Only one shoes item can be included.";
+  for (const item of items) {
+    const product = getProductById(item.productId);
+    if (!product) return "One or more selected products no longer exist.";
+    const productType = (product.productType ?? "").toLowerCase();
+    if (item.slot === "top" && product.category !== "tee") {
+      return "Top slot only accepts shirt products.";
+    }
+    if (item.slot === "hoodie" && product.category !== "hoodie") {
+      return "Hoodie slot only accepts hoodie products.";
+    }
+    if (item.slot === "pants") {
+      if (product.category !== "pants") {
+        return "Bottom slot only accepts bottoms products.";
+      }
+      if (
+        productType &&
+        !["shorts", "jeans", "joggers", "pants"].some((token) => productType.includes(token))
+      ) {
+        return "Bottom item must be Shorts, Jeans, or Joggers/Pants.";
+      }
+    }
+    if (item.slot === "shoes" && product.category !== "shoes") {
+      return "Shoes slot only accepts shoes products.";
+    }
+    if (item.slot === "accessory" && !["accessory", "cap"].includes(product.category)) {
+      return "Accessories slot only accepts accessories.";
+    }
+  }
+  return null;
 }
 
 export async function GET() {
@@ -57,6 +103,11 @@ export async function POST(request: NextRequest) {
   if (!body.slug || !body.name || !body.description || !body.coverImage) {
     return NextResponse.json({ error: "Name, slug, description, and cover image are required." }, { status: 400 });
   }
+  const items = normalizeItems(body.items ?? []);
+  const structureError = validateStructuredFit(items);
+  if (structureError) {
+    return NextResponse.json({ error: structureError }, { status: 400 });
+  }
   const fit = createPremadeFit({
     slug: body.slug,
     name: body.name,
@@ -65,7 +116,7 @@ export async function POST(request: NextRequest) {
     galleryImages: body.galleryImages ?? [body.coverImage],
     active: body.active ?? true,
     featured: body.featured ?? false,
-    items: normalizeItems(body.items ?? []),
+    items,
   });
   return NextResponse.json({ fit });
 }
@@ -78,6 +129,11 @@ export async function PATCH(request: NextRequest) {
   if (!body.slug || !body.name || !body.description || !body.coverImage) {
     return NextResponse.json({ error: "Name, slug, description, and cover image are required." }, { status: 400 });
   }
+  const items = normalizeItems(body.items ?? []);
+  const structureError = validateStructuredFit(items);
+  if (structureError) {
+    return NextResponse.json({ error: structureError }, { status: 400 });
+  }
   const fit = updatePremadeFit(body.id, {
     slug: body.slug,
     name: body.name,
@@ -86,7 +142,7 @@ export async function PATCH(request: NextRequest) {
     galleryImages: body.galleryImages ?? [body.coverImage],
     active: body.active ?? true,
     featured: body.featured ?? false,
-    items: normalizeItems(body.items ?? []),
+    items,
   });
   return NextResponse.json({ fit });
 }

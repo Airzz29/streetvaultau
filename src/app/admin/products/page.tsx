@@ -12,11 +12,12 @@ function getVariantKey(color: string, size: string) {
 const categoryOptions = [
   { value: "hoodie", label: "Hoodies" },
   { value: "tee", label: "Shirts" },
-  { value: "pants", label: "Jeans / Pants" },
+  { value: "pants", label: "Pants / Shorts / Jeans" },
   { value: "shoes", label: "Shoes" },
   { value: "cap", label: "Caps" },
   { value: "accessory", label: "Accessories" },
 ];
+const bottomsTypeOptions = ["Joggers", "Jeans", "Shorts"];
 
 function categoryLabel(value: string) {
   return categoryOptions.find((option) => option.value === value)?.label ?? value;
@@ -359,7 +360,20 @@ export default function AdminProductsRoute() {
               Auto
             </button>
           </div>
-          <select value={form.category} onChange={(e) => setForm((v) => ({ ...v, category: e.target.value }))} className="min-h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm">
+          <select
+            value={form.category}
+            onChange={(e) =>
+              setForm((v) => ({
+                ...v,
+                category: e.target.value,
+                productType:
+                  e.target.value === "pants"
+                    ? bottomsTypeOptions.includes(v.productType) ? v.productType : "Joggers"
+                    : v.productType,
+              }))
+            }
+            className="min-h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm"
+          >
             {categoryOptions.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
@@ -367,13 +381,27 @@ export default function AdminProductsRoute() {
             ))}
           </select>
           <select value={form.outfitSlot} onChange={(e) => setForm((v) => ({ ...v, outfitSlot: e.target.value }))} className="min-h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm">
-            {["top", "bottom", "accessory"].map((slot) => (
+            {["top", "bottom", "shoes", "accessory"].map((slot) => (
               <option key={slot}>{slot}</option>
             ))}
           </select>
           <input value={form.brand} onChange={(e) => setForm((v) => ({ ...v, brand: e.target.value }))} placeholder="Brand" className="min-h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm" />
           <input value={form.collection} onChange={(e) => setForm((v) => ({ ...v, collection: e.target.value }))} placeholder="Collection" className="min-h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm" />
-          <input value={form.productType} onChange={(e) => setForm((v) => ({ ...v, productType: e.target.value }))} placeholder="Product type (e.g. Zip-up Hoodie, Sneakers)" className="min-h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm sm:col-span-2" />
+          {form.category === "pants" ? (
+            <select
+              value={bottomsTypeOptions.includes(form.productType) ? form.productType : "Joggers"}
+              onChange={(e) => setForm((v) => ({ ...v, productType: e.target.value }))}
+              className="min-h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm sm:col-span-2"
+            >
+              {bottomsTypeOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input value={form.productType} onChange={(e) => setForm((v) => ({ ...v, productType: e.target.value }))} placeholder="Product type (e.g. Zip-up Hoodie, Sneakers)" className="min-h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm sm:col-span-2" />
+          )}
           <input value={form.price} onChange={(e) => setForm((v) => ({ ...v, price: e.target.value }))} placeholder="Price AUD" className="min-h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm" />
           <input value={form.compareAtPrice} onChange={(e) => setForm((v) => ({ ...v, compareAtPrice: e.target.value }))} placeholder="Compare-at price (optional)" className="min-h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm" />
           <input value={form.costPrice} onChange={(e) => setForm((v) => ({ ...v, costPrice: e.target.value }))} placeholder="Cost AUD" className="min-h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm" />

@@ -45,27 +45,37 @@ export function PremadeFitDetailExperience({
     }
     return seed;
   });
+  const [includedOptional, setIncludedOptional] = useState<Record<string, boolean>>(() => {
+    const seed: Record<string, boolean> = {};
+    for (const item of fit.items) {
+      seed[item.id] = item.isOptional ? true : true;
+    }
+    return seed;
+  });
 
   const selectedVariants = useMemo(
     () =>
       fit.items.map((item) => {
+        const included = item.isOptional ? includedOptional[item.id] !== false : true;
         const chosen = selection[item.id];
         const variant =
           item.variants.find((entry) => entry.id === chosen?.variantId) ??
           item.variants.find((entry) => entry.id === item.defaultVariantId) ??
           item.variants[0];
-        return { item, variant: variant ?? null };
+        return { item, included, variant: included ? (variant ?? null) : null };
       }),
-    [fit.items, selection]
+    [fit.items, includedOptional, selection]
   );
 
-  const bundlePrice = selectedVariants.reduce((sum, row) => sum + (row.variant?.price ?? 0), 0);
-  const bundleCompareAt = fit.items.reduce((sum, item) => {
+  const includedRows = selectedVariants.filter((row) => row.included);
+  const bundlePrice = includedRows.reduce((sum, row) => sum + (row.variant?.price ?? 0), 0);
+  const bundleCompareAt = includedRows.reduce((sum, row) => {
+    const item = row.item;
     const maxPrice = item.variants.length ? Math.max(...item.variants.map((variant) => variant.price)) : 0;
     return sum + maxPrice;
   }, 0);
   const bundleSavings = Math.max(0, bundleCompareAt - bundlePrice);
-  const soldOut = selectedVariants.some((row) => !row.variant || row.variant.stock <= 0);
+  const soldOut = includedRows.some((row) => !row.variant || row.variant.stock <= 0);
 
   const ensureLoggedIn = async () => {
     const response = await fetch("/api/auth/me", { cache: "no-store" });
@@ -81,7 +91,7 @@ export function PremadeFitDetailExperience({
   const addFitToCart = async (goCheckout: boolean) => {
     if (!(await ensureLoggedIn())) return;
     if (soldOut) return;
-    const items = selectedVariants
+    const items = includedRows
       .filter((row): row is typeof row & { variant: NonNullable<typeof row.variant> } => Boolean(row.variant))
       .map((row) => {
         const colorImage = resolveColorImages(row.item, row.variant.color).mainImage;
@@ -162,7 +172,7 @@ export function PremadeFitDetailExperience({
       <div className="space-y-4">
         <h2 className="text-2xl font-semibold">Included Items</h2>
         <div className="space-y-4">
-          {selectedVariants.map(({ item, variant }) => {
+          {selectedVariants.map(({ item, variant, included }) => {
             const selectedColor = selection[item.id]?.color ?? variant?.color ?? "";
             const colorImages = resolveColorImages(item, selectedColor);
             const sizeOptions = item.selectionMode === "fixed"
@@ -187,11 +197,26 @@ export function PremadeFitDetailExperience({
                     <Link href={`/product/${item.productSlug}`} className="text-lg font-semibold hover:underline">
                       {item.productName}
                     </Link>
-                    {item.selectionMode === "fixed" ? (
+                    {item.isOptional ? (
+                      <label className="inline-flex items-center gap-2 rounded border border-white/20 px-2 py-1 text-xs text-zinc-300">
+                        <input
+                          type="checkbox"
+                          checked={included}
+                          onChange={(event) =>
+                            setIncludedOptional((prev) => ({ ...prev, [item.id]: event.target.checked }))
+                          }
+                        />
+                        Include this optional item
+                      </label>
+                    ) : null}
+                    {!included ? (
+                      <p className="text-sm text-zinc-500">Skipped by customer.</p>
+                    ) : null}
+                    {included && item.selectionMode === "fixed" ? (
                       <p className="text-sm text-zinc-400">
                         Fixed selection: {variant?.color} / {variant?.size}
                       </p>
-                    ) : (
+                    ) : included ? (
                       <div className="space-y-2">
                         <div className="flex flex-wrap gap-2">
                           {colorOptions.map((color) => (
@@ -241,7 +266,7 @@ export function PremadeFitDetailExperience({
                           ))}
                         </div>
                       </div>
-                    )}
+                    ) : null}
                     <p className="text-sm text-zinc-300">
                       {variant ? formatPriceAUD(variant.price) : "Unavailable"}
                     </p>

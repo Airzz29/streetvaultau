@@ -8,6 +8,7 @@ import { formatPriceAUD } from "@/lib/utils";
 const slotLabels: Record<OutfitSlot, string> = {
   top: "Top",
   bottom: "Bottom",
+  shoes: "Shoes (Optional)",
   accessory: "Accessory",
 };
 
@@ -19,12 +20,14 @@ export function OutfitBuilder({ products }: OutfitBuilderProps) {
   const slotOptions: Record<OutfitSlot, ProductWithVariants[]> = {
     top: products.filter((product) => product.outfitSlot === "top"),
     bottom: products.filter((product) => product.outfitSlot === "bottom"),
+    shoes: products.filter((product) => product.outfitSlot === "shoes"),
     accessory: products.filter((product) => product.outfitSlot === "accessory"),
   };
 
   const [selection, setSelection] = useState<Record<OutfitSlot, string>>({
     top: slotOptions.top[0]?.id ?? "",
     bottom: slotOptions.bottom[0]?.id ?? "",
+    shoes: "",
     accessory: slotOptions.accessory[0]?.id ?? "",
   });
   const { addItems } = useCart();
@@ -62,6 +65,7 @@ export function OutfitBuilder({ products }: OutfitBuilderProps) {
                 setSelection((prev) => ({ ...prev, [slot]: event.target.value }))
               }
             >
+              {slot === "shoes" ? <option value="">Skip shoes</option> : null}
               {slotOptions[slot].map((product) => (
                 <option key={product.id} value={product.id}>
                   {product.name} - {formatPriceAUD(product.variants[0]?.price ?? 0)}

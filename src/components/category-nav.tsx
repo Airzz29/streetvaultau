@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 
 export const categoryNavItems = [
   { href: "/clothes", label: "Shirts" },
-  { href: "/pants-jeans", label: "Jeans / Pants" },
+  { href: "/pants-jeans", label: "Pants / Shorts / Jeans" },
   { href: "/shoes", label: "Shoes" },
   { href: "/hoodies", label: "Hoodies" },
   { href: "/accessories", label: "Accessories" },

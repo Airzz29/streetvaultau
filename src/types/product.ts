@@ -1,4 +1,4 @@
-export type OutfitSlot = "top" | "bottom" | "accessory";
+export type OutfitSlot = "top" | "bottom" | "shoes" | "accessory";
 
 export type ProductCategory =
   | "hoodie"
@@ -69,6 +69,7 @@ export type ProductCardData = {
   slug: string;
   name: string;
   brand?: string | null;
+  productType?: string | null;
   image: string;
   builderImage?: string | null;
   category: ProductCategory;
@@ -77,6 +78,7 @@ export type ProductCardData = {
   lowestStock: number;
   totalStock: number;
   availableSizes: string[];
+  availableColors: string[];
   tags: ProductTag[];
 };
 

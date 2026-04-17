@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
     const categoryLabelMap: Record<string, string> = {
       hoodie: "Hoodies",
       tee: "Shirts",
-      pants: "Jeans / Pants",
+      pants: "Pants / Shorts / Jeans",
       shoes: "Shoes",
       accessory: "Accessories",
       cap: "Accessories",

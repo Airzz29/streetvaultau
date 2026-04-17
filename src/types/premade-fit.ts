@@ -1,10 +1,13 @@
 import { ProductColorImageGroup, ProductVariant } from "@/types/product";
 
 export type PremadeFitSelectionMode = "fixed" | "selectable";
+export type PremadeFitItemSlot = "top" | "hoodie" | "pants" | "shoes" | "accessory";
 
 export type PremadeFitItem = {
   id: string;
   fitId: string;
+  slot: PremadeFitItemSlot;
+  isOptional: boolean;
   productId: string;
   productSlug: string;
   productName: string;
