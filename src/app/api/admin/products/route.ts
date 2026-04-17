@@ -63,6 +63,9 @@ export async function POST(request: NextRequest) {
       cap: "Accessories",
     };
     const categoryLabel = categoryLabelMap[created.category] ?? created.category;
+    const variantsInStock = created.variants.filter((variant) => variant.stock > 0);
+    const sizesInStock = Array.from(new Set(variantsInStock.map((variant) => variant.size)));
+    const colorsInStock = Array.from(new Set(variantsInStock.map((variant) => variant.color)));
     const campaignBody = [
       `We just launched: ${created.name}.`,
       `Category: ${categoryLabel}`,
@@ -79,6 +82,12 @@ export async function POST(request: NextRequest) {
           body: campaignBody,
           ctaLabel: "View Product",
           ctaUrl: `${appBaseUrl}/product/${created.slug}`,
+          productHighlight: {
+            name: created.name,
+            image: created.mainImage ?? created.images[0] ?? null,
+            sizesInStock,
+            colorsInStock,
+          },
         })
       )
     );
@@ -138,6 +147,9 @@ export async function PATCH(request: NextRequest) {
     nextMinPrice < beforeMinPrice
   ) {
     const appBaseUrl = resolveAppBaseUrl();
+    const variantsInStock = updated.variants.filter((variant) => variant.stock > 0);
+    const sizesInStock = Array.from(new Set(variantsInStock.map((variant) => variant.size)));
+    const colorsInStock = Array.from(new Set(variantsInStock.map((variant) => variant.color)));
     const discountAmount = beforeMinPrice - nextMinPrice;
     const bodyText = [
       `${updated.name} just got a price drop.`,
@@ -156,6 +168,12 @@ export async function PATCH(request: NextRequest) {
           body: bodyText,
           ctaLabel: "Shop Discounted Item",
           ctaUrl: `${appBaseUrl}/product/${updated.slug}`,
+          productHighlight: {
+            name: updated.name,
+            image: updated.mainImage ?? updated.images[0] ?? null,
+            sizesInStock,
+            colorsInStock,
+          },
         })
       )
     );

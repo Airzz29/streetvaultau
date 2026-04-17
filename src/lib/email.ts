@@ -378,11 +378,46 @@ export async function sendMarketingCampaignEmail(params: {
   body: string;
   ctaLabel?: string;
   ctaUrl?: string;
+  productHighlight?: {
+    name: string;
+    image?: string | null;
+    sizesInStock?: string[];
+    colorsInStock?: string[];
+  };
 }) {
   const transport = getTransport();
   const from = process.env.EMAIL_FROM ?? process.env.EMAIL_SMTP_USER;
   if (!transport || !from) return { sent: false };
   const ctaUrl = toAbsoluteUrl(params.ctaUrl);
+  const productImageUrl = params.productHighlight?.image
+    ? toAbsoluteImageUrl(params.productHighlight.image, resolveAppBaseUrl())
+    : "";
+  const productBlock = params.productHighlight
+    ? `
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border:1px solid #3f3f46;border-radius:12px;background:#111827;margin:0 0 14px;">
+        <tr>
+          <td style="padding:12px;">
+            ${
+              productImageUrl
+                ? `<img src="${productImageUrl}" alt="${escapeHtml(params.productHighlight.name)}" width="120" height="120" style="display:block;margin:0 auto 10px;border-radius:10px;border:1px solid #3f3f46;object-fit:cover;background:#0f172a;" />`
+                : ""
+            }
+            <p style="margin:0 0 8px;font-size:14px;line-height:1.5;color:#f4f4f5;font-weight:700;">${escapeHtml(params.productHighlight.name)}</p>
+            ${
+              params.productHighlight.colorsInStock?.length
+                ? `<p style="margin:0 0 6px;font-size:12px;line-height:1.5;color:#d4d4d8;"><strong>Colors in stock:</strong> ${escapeHtml(params.productHighlight.colorsInStock.join(", "))}</p>`
+                : ""
+            }
+            ${
+              params.productHighlight.sizesInStock?.length
+                ? `<p style="margin:0;font-size:12px;line-height:1.5;color:#d4d4d8;"><strong>Sizes in stock:</strong> ${escapeHtml(params.productHighlight.sizesInStock.join(", "))}</p>`
+                : ""
+            }
+          </td>
+        </tr>
+      </table>
+    `
+    : "";
   const safeBody = params.body
     .split(/\r?\n/)
     .map((line) => `<p style="margin:0 0 10px;color:#d4d4d8;font-size:14px;line-height:1.7;">${escapeHtml(line)}</p>`)
@@ -395,7 +430,7 @@ export async function sendMarketingCampaignEmail(params: {
     html: wrapBrandEmail({
       title: params.headline,
       subtitle: "Latest update from StreetVault.",
-      bodyHtml: safeBody,
+      bodyHtml: `${productBlock}${safeBody}`,
       ctaLabel: params.ctaLabel,
       ctaUrl,
       fallbackText: ctaUrl ? "If the button does not work, use this link:" : undefined,
