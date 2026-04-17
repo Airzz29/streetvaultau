@@ -49,6 +49,33 @@ function normalizeItems(items: FitItemInput[] = []) {
     .filter((item) => item.productId);
 }
 
+function applyLiveStockConstraints(items: ReturnType<typeof normalizeItems>) {
+  return items.map((item) => {
+    const product = getProductById(item.productId);
+    const inStockVariants = (product?.variants ?? []).filter((variant) => variant.stock > 0);
+    const inStockColors = Array.from(new Set(inStockVariants.map((variant) => variant.color)));
+    const inStockSizes = Array.from(new Set(inStockVariants.map((variant) => variant.size)));
+    const allowedColors = item.allowedColors.length
+      ? item.allowedColors.filter((color) => inStockColors.includes(color))
+      : inStockColors;
+    const allowedSizes = item.allowedSizes.length
+      ? item.allowedSizes.filter((size) => inStockSizes.includes(size))
+      : inStockSizes;
+    const defaultVariantStillValid = inStockVariants.some(
+      (variant) =>
+        variant.id === item.defaultVariantId &&
+        allowedColors.includes(variant.color) &&
+        allowedSizes.includes(variant.size)
+    );
+    return {
+      ...item,
+      allowedColors,
+      allowedSizes,
+      defaultVariantId: defaultVariantStillValid ? item.defaultVariantId : inStockVariants[0]?.id ?? null,
+    };
+  });
+}
+
 function validateStructuredFit(items: ReturnType<typeof normalizeItems>) {
   const tops = items.filter((item) => item.slot === "top");
   const hoodies = items.filter((item) => item.slot === "hoodie");
@@ -103,7 +130,7 @@ export async function POST(request: NextRequest) {
   if (!body.slug || !body.name || !body.description || !body.coverImage) {
     return NextResponse.json({ error: "Name, slug, description, and cover image are required." }, { status: 400 });
   }
-  const items = normalizeItems(body.items ?? []);
+  const items = applyLiveStockConstraints(normalizeItems(body.items ?? []));
   const structureError = validateStructuredFit(items);
   if (structureError) {
     return NextResponse.json({ error: structureError }, { status: 400 });
@@ -129,7 +156,7 @@ export async function PATCH(request: NextRequest) {
   if (!body.slug || !body.name || !body.description || !body.coverImage) {
     return NextResponse.json({ error: "Name, slug, description, and cover image are required." }, { status: 400 });
   }
-  const items = normalizeItems(body.items ?? []);
+  const items = applyLiveStockConstraints(normalizeItems(body.items ?? []));
   const structureError = validateStructuredFit(items);
   if (structureError) {
     return NextResponse.json({ error: structureError }, { status: 400 });

@@ -17,7 +17,7 @@ export function PremadeFitCardView({ fit }: { fit: PremadeFitCard }) {
           alt={fit.name}
           fill
           sizes="(max-width: 1024px) 100vw, 33vw"
-          className="object-cover transition duration-300 group-hover:scale-[1.03]"
+          className="object-contain p-3 transition duration-300 group-hover:scale-[1.03]"
         />
       </div>
       <div className="space-y-2 p-4">

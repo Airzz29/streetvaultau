@@ -117,7 +117,7 @@ export function PremadeFitDetailExperience({
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="space-y-3">
           <div className="relative min-h-[360px] overflow-hidden rounded-2xl border border-white/10 bg-black/30">
-            <Image src={activeImage} alt={fit.name} fill sizes="(max-width: 1024px) 100vw, 50vw" className="object-cover" />
+            <Image src={activeImage} alt={fit.name} fill sizes="(max-width: 1024px) 100vw, 50vw" className="object-contain p-4" />
           </div>
           <div className="grid grid-cols-4 gap-2">
             {[fit.coverImage, ...fit.galleryImages].filter(Boolean).slice(0, 8).map((image) => (
@@ -127,7 +127,7 @@ export function PremadeFitDetailExperience({
                 onClick={() => setActiveImage(image)}
                 className={`relative h-20 overflow-hidden rounded-lg border ${activeImage === image ? "border-zinc-100" : "border-white/15"}`}
               >
-                <Image src={image} alt={fit.name} fill sizes="120px" className="object-cover" />
+                <Image src={image} alt={fit.name} fill sizes="120px" className="object-contain p-1.5" />
               </button>
             ))}
           </div>
@@ -190,7 +190,7 @@ export function PremadeFitDetailExperience({
                       alt={item.productName}
                       fill
                       sizes="120px"
-                      className="object-cover"
+                      className="object-contain p-2"
                     />
                   </div>
                   <div className="space-y-2">

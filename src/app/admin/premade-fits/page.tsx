@@ -12,8 +12,8 @@ type FitItemForm = {
   productId: string;
   itemMainImage: string;
   selectionMode: "fixed" | "selectable";
-  allowedColors: string;
-  allowedSizes: string;
+  allowedColors: string[];
+  allowedSizes: string[];
   defaultVariantId: string;
   sortOrder: number;
 };
@@ -60,8 +60,8 @@ export default function AdminPremadeFitsPage() {
       productId: "",
       itemMainImage: "",
       selectionMode: "fixed",
-      allowedColors: "",
-      allowedSizes: "",
+      allowedColors: [],
+      allowedSizes: [],
       defaultVariantId: "",
       sortOrder: 0,
     },
@@ -72,8 +72,8 @@ export default function AdminPremadeFitsPage() {
       productId: "",
       itemMainImage: "",
       selectionMode: "fixed",
-      allowedColors: "",
-      allowedSizes: "",
+      allowedColors: [],
+      allowedSizes: [],
       defaultVariantId: "",
       sortOrder: 1,
     },
@@ -166,8 +166,8 @@ export default function AdminPremadeFitsPage() {
         productId: "",
         itemMainImage: "",
         selectionMode: "fixed",
-        allowedColors: "",
-        allowedSizes: "",
+        allowedColors: [],
+        allowedSizes: [],
         defaultVariantId: "",
         sortOrder: 0,
       },
@@ -178,8 +178,8 @@ export default function AdminPremadeFitsPage() {
         productId: "",
         itemMainImage: "",
         selectionMode: "fixed",
-        allowedColors: "",
-        allowedSizes: "",
+        allowedColors: [],
+        allowedSizes: [],
         defaultVariantId: "",
         sortOrder: 1,
       },
@@ -193,8 +193,8 @@ export default function AdminPremadeFitsPage() {
     productId: "",
     itemMainImage: "",
     selectionMode: "fixed",
-    allowedColors: "",
-    allowedSizes: "",
+    allowedColors: [],
+    allowedSizes: [],
     defaultVariantId: "",
     sortOrder: items.length,
   });
@@ -237,9 +237,24 @@ export default function AdminPremadeFitsPage() {
   }, [bottomTypeFilter, picker, pickerSearch, productsForSlot]);
 
   const assignProductToItem = (slot: PremadeFitItemSlot, productId: string, itemId?: string) => {
+    const product = products.find((entry) => entry.id === productId);
+    const inStockVariants = (product?.variants ?? []).filter((variant) => variant.stock > 0);
+    const defaultAllowedColors = Array.from(new Set(inStockVariants.map((variant) => variant.color)));
+    const defaultAllowedSizes = Array.from(new Set(inStockVariants.map((variant) => variant.size)));
+    const defaultVariantId = inStockVariants[0]?.id ?? "";
     if (itemId) {
       setItems((prev) =>
-        prev.map((entry) => (entry.id === itemId ? { ...entry, productId } : entry))
+        prev.map((entry) =>
+          entry.id === itemId
+            ? {
+                ...entry,
+                productId,
+                allowedColors: defaultAllowedColors,
+                allowedSizes: defaultAllowedSizes,
+                defaultVariantId,
+              }
+            : entry
+        )
       );
       return;
     }
@@ -247,12 +262,29 @@ export default function AdminPremadeFitsPage() {
     if (slot !== "accessory" && existingSingle) {
       setItems((prev) =>
         prev.map((entry) =>
-          entry.id === existingSingle.id ? { ...entry, productId } : entry
+          entry.id === existingSingle.id
+            ? {
+                ...entry,
+                productId,
+                allowedColors: defaultAllowedColors,
+                allowedSizes: defaultAllowedSizes,
+                defaultVariantId,
+              }
+            : entry
         )
       );
       return;
     }
-    setItems((prev) => [...prev, { ...createEmptyItem(slot), productId }]);
+    setItems((prev) => [
+      ...prev,
+      {
+        ...createEmptyItem(slot),
+        productId,
+        allowedColors: defaultAllowedColors,
+        allowedSizes: defaultAllowedSizes,
+        defaultVariantId,
+      },
+    ]);
   };
 
   const onSubmit = async (event: FormEvent) => {
@@ -278,14 +310,8 @@ export default function AdminPremadeFitsPage() {
           isOptional: item.isOptional,
           productId: item.productId,
           selectionMode: item.selectionMode,
-          allowedColors: item.allowedColors
-            .split(",")
-            .map((entry) => entry.trim())
-            .filter(Boolean),
-          allowedSizes: item.allowedSizes
-            .split(",")
-            .map((entry) => entry.trim())
-            .filter(Boolean),
+          allowedColors: item.allowedColors,
+          allowedSizes: item.allowedSizes,
           defaultVariantId: item.defaultVariantId || null,
           itemMainImage: item.itemMainImage.trim() || null,
           sortOrder: index,
@@ -501,26 +527,72 @@ export default function AdminPremadeFitsPage() {
                   <option value="fixed">Fixed variant</option>
                   <option value="selectable">Customer selectable</option>
                 </select>
-                <input
-                  value={item.allowedColors}
-                  onChange={(event) =>
-                    setItems((prev) =>
-                      prev.map((entry) => (entry.id === item.id ? { ...entry, allowedColors: event.target.value } : entry))
-                    )
-                  }
-                  placeholder="Allowed colors (comma separated)"
-                  className="min-h-10 rounded-lg border border-white/15 bg-black/40 px-2 text-xs"
-                />
-                <input
-                  value={item.allowedSizes}
-                  onChange={(event) =>
-                    setItems((prev) =>
-                      prev.map((entry) => (entry.id === item.id ? { ...entry, allowedSizes: event.target.value } : entry))
-                    )
-                  }
-                  placeholder="Allowed sizes (comma separated)"
-                  className="min-h-10 rounded-lg border border-white/15 bg-black/40 px-2 text-xs"
-                />
+                <div className="space-y-2 rounded-lg border border-white/15 bg-black/40 px-2 py-2 text-xs">
+                  <p className="text-zinc-300">Allowed colors (in-stock only)</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {Array.from(new Set((product?.variants ?? []).filter((variant) => variant.stock > 0).map((variant) => variant.color))).map((color) => {
+                      const selected = item.allowedColors.includes(color);
+                      return (
+                        <button
+                          key={`${item.id}-color-${color}`}
+                          type="button"
+                          onClick={() =>
+                            setItems((prev) =>
+                              prev.map((entry) =>
+                                entry.id === item.id
+                                  ? {
+                                      ...entry,
+                                      allowedColors: selected
+                                        ? entry.allowedColors.filter((value) => value !== color)
+                                        : [...entry.allowedColors, color],
+                                    }
+                                  : entry
+                              )
+                            )
+                          }
+                          className={`rounded border px-2 py-1 ${
+                            selected ? "border-zinc-100 bg-zinc-100 text-zinc-900" : "border-white/20 text-zinc-300"
+                          }`}
+                        >
+                          {color}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="space-y-2 rounded-lg border border-white/15 bg-black/40 px-2 py-2 text-xs">
+                  <p className="text-zinc-300">Allowed sizes (in-stock only)</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {Array.from(new Set((product?.variants ?? []).filter((variant) => variant.stock > 0).map((variant) => variant.size))).map((size) => {
+                      const selected = item.allowedSizes.includes(size);
+                      return (
+                        <button
+                          key={`${item.id}-size-${size}`}
+                          type="button"
+                          onClick={() =>
+                            setItems((prev) =>
+                              prev.map((entry) =>
+                                entry.id === item.id
+                                  ? {
+                                      ...entry,
+                                      allowedSizes: selected
+                                        ? entry.allowedSizes.filter((value) => value !== size)
+                                        : [...entry.allowedSizes, size],
+                                    }
+                                  : entry
+                              )
+                            )
+                          }
+                          className={`rounded border px-2 py-1 ${
+                            selected ? "border-zinc-100 bg-zinc-100 text-zinc-900" : "border-white/20 text-zinc-300"
+                          }`}
+                        >
+                          {size}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
                 <input
                   value={item.itemMainImage}
                   onChange={(event) =>
@@ -651,8 +723,8 @@ export default function AdminPremadeFitsPage() {
                         productId: item.productId,
                         itemMainImage: item.itemMainImage ?? "",
                         selectionMode: item.selectionMode,
-                        allowedColors: item.allowedColors.join(", "),
-                        allowedSizes: item.allowedSizes.join(", "),
+                        allowedColors: item.allowedColors,
+                        allowedSizes: item.allowedSizes,
                         defaultVariantId: item.defaultVariantId ?? "",
                         sortOrder: item.sortOrder ?? index,
                       }))

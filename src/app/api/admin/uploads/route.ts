@@ -45,8 +45,8 @@ export async function POST(request: NextRequest) {
       const buffer = Buffer.from(await file.arrayBuffer());
       const optimized = await sharp(buffer)
         .rotate()
-        .resize({ width: 2000, height: 2000, fit: "inside", withoutEnlargement: true })
-        .webp({ quality: 84, effort: 4 })
+        .resize({ width: 2400, height: 2400, fit: "inside", withoutEnlargement: true })
+        .webp({ quality: 92, effort: 5, smartSubsample: true })
         .toBuffer();
       await fs.writeFile(fullPath, optimized);
       uploaded.push(`/uploads/products/${fileName}`);
