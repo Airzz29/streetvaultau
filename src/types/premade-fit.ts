@@ -10,6 +10,7 @@ export type PremadeFitItem = {
   productName: string;
   productDescription: string;
   productMainImage: string;
+  itemMainImage: string | null;
   productImages: string[];
   productColorImageGroups: ProductColorImageGroup[];
   shippingRateAUD: number;

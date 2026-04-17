@@ -1,12 +1,14 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import Image from "next/image";
+import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 import { ProductWithVariants } from "@/types/product";
 import { PremadeFit } from "@/types/premade-fit";
 
 type FitItemForm = {
   id: string;
   productId: string;
+  itemMainImage: string;
   selectionMode: "fixed" | "selectable";
   allowedColors: string;
   allowedSizes: string;
@@ -41,6 +43,7 @@ export default function AdminPremadeFitsPage() {
     {
       id: crypto.randomUUID(),
       productId: "",
+      itemMainImage: "",
       selectionMode: "fixed",
       allowedColors: "",
       allowedSizes: "",
@@ -58,6 +61,59 @@ export default function AdminPremadeFitsPage() {
     const productsData = await productsResponse.json();
     setFits(fitsData.fits ?? []);
     setProducts(productsData.products ?? []);
+  };
+
+  const uploadFiles = async (files: FileList | null) => {
+    if (!files?.length) return [];
+    const formData = new FormData();
+    Array.from(files).forEach((file) => formData.append("files", file));
+    const response = await fetch("/api/admin/uploads", {
+      method: "POST",
+      credentials: "include",
+      body: formData,
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error ?? "Upload failed.");
+    return (data.paths ?? []) as string[];
+  };
+
+  const onCoverUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    try {
+      const [uploaded] = await uploadFiles(event.target.files);
+      if (!uploaded) return;
+      setForm((prev) => {
+        const existingGallery = prev.galleryImages
+          .split("\n")
+          .map((line) => line.trim())
+          .filter(Boolean);
+        return {
+          ...prev,
+          coverImage: uploaded,
+          galleryImages: Array.from(new Set([uploaded, ...existingGallery])).join("\n"),
+        };
+      });
+    } finally {
+      event.target.value = "";
+    }
+  };
+
+  const onGalleryUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    try {
+      const uploaded = await uploadFiles(event.target.files);
+      if (!uploaded.length) return;
+      setForm((prev) => {
+        const existing = prev.galleryImages
+          .split("\n")
+          .map((line) => line.trim())
+          .filter(Boolean);
+        return {
+          ...prev,
+          galleryImages: Array.from(new Set([...existing, ...uploaded])).join("\n"),
+        };
+      });
+    } finally {
+      event.target.value = "";
+    }
   };
 
   useEffect(() => {
@@ -79,6 +135,7 @@ export default function AdminPremadeFitsPage() {
       {
         id: crypto.randomUUID(),
         productId: "",
+        itemMainImage: "",
         selectionMode: "fixed",
         allowedColors: "",
         allowedSizes: "",
@@ -118,6 +175,7 @@ export default function AdminPremadeFitsPage() {
             .map((entry) => entry.trim())
             .filter(Boolean),
           defaultVariantId: item.defaultVariantId || null,
+          itemMainImage: item.itemMainImage.trim() || null,
           sortOrder: index,
         })),
     };
@@ -170,12 +228,33 @@ export default function AdminPremadeFitsPage() {
             placeholder="Cover image path"
             className="min-h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm sm:col-span-2"
           />
+          <input
+            type="file"
+            accept="image/png,image/webp,image/jpeg,image/jpg"
+            onChange={onCoverUpload}
+            className="w-full text-xs file:mr-2 file:rounded-md file:border-0 file:bg-zinc-100 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-zinc-900 sm:col-span-2"
+          />
           <textarea
             value={form.galleryImages}
             onChange={(event) => setForm((prev) => ({ ...prev, galleryImages: event.target.value }))}
             placeholder="Gallery images (one per line)"
             className="min-h-20 rounded-lg border border-white/15 bg-black/30 px-3 py-2 text-sm sm:col-span-2"
           />
+          <input
+            type="file"
+            multiple
+            accept="image/png,image/webp,image/jpeg,image/jpg"
+            onChange={onGalleryUpload}
+            className="w-full text-xs file:mr-2 file:rounded-md file:border-0 file:bg-zinc-100 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-zinc-900 sm:col-span-2"
+          />
+          {form.coverImage ? (
+            <div className="sm:col-span-2 rounded-lg border border-white/10 bg-black/30 p-2">
+              <p className="mb-2 text-xs text-zinc-400">Fit main image preview</p>
+              <div className="relative h-40 overflow-hidden rounded border border-white/10">
+                <Image src={form.coverImage} alt="Fit cover" fill sizes="600px" className="object-cover" />
+              </div>
+            </div>
+          ) : null}
           <textarea
             value={form.description}
             onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))}
@@ -211,6 +290,7 @@ export default function AdminPremadeFitsPage() {
                   {
                     id: crypto.randomUUID(),
                     productId: "",
+                    itemMainImage: "",
                     selectionMode: "fixed",
                     allowedColors: "",
                     allowedSizes: "",
@@ -282,6 +362,50 @@ export default function AdminPremadeFitsPage() {
                   placeholder="Allowed sizes (comma separated)"
                   className="min-h-10 rounded-lg border border-white/15 bg-black/40 px-2 text-xs"
                 />
+                <input
+                  value={item.itemMainImage}
+                  onChange={(event) =>
+                    setItems((prev) =>
+                      prev.map((entry) =>
+                        entry.id === item.id ? { ...entry, itemMainImage: event.target.value } : entry
+                      )
+                    )
+                  }
+                  placeholder="Item main image path (optional)"
+                  className="min-h-10 rounded-lg border border-white/15 bg-black/40 px-2 text-xs sm:col-span-2"
+                />
+                <input
+                  type="file"
+                  accept="image/png,image/webp,image/jpeg,image/jpg"
+                  onChange={async (event) => {
+                    try {
+                      const [uploaded] = await uploadFiles(event.target.files);
+                      if (!uploaded) return;
+                      setItems((prev) =>
+                        prev.map((entry) =>
+                          entry.id === item.id ? { ...entry, itemMainImage: uploaded } : entry
+                        )
+                      );
+                    } finally {
+                      event.target.value = "";
+                    }
+                  }}
+                  className="w-full text-xs file:mr-2 file:rounded-md file:border-0 file:bg-zinc-100 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-zinc-900 sm:col-span-2"
+                />
+                {item.itemMainImage ? (
+                  <div className="sm:col-span-2 rounded border border-white/10 bg-black/20 p-2">
+                    <p className="mb-2 text-[11px] text-zinc-400">Item image preview</p>
+                    <div className="relative h-24 overflow-hidden rounded border border-white/10">
+                      <Image
+                        src={item.itemMainImage}
+                        alt="Included item"
+                        fill
+                        sizes="300px"
+                        className="object-cover"
+                      />
+                    </div>
+                  </div>
+                ) : null}
                 <select
                   value={item.defaultVariantId}
                   onChange={(event) =>
@@ -361,6 +485,7 @@ export default function AdminPremadeFitsPage() {
                       fit.items.map((item, index) => ({
                         id: item.id,
                         productId: item.productId,
+                        itemMainImage: item.itemMainImage ?? "",
                         selectionMode: item.selectionMode,
                         allowedColors: item.allowedColors.join(", "),
                         allowedSizes: item.allowedSizes.join(", "),

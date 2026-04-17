@@ -24,6 +24,17 @@ type Address = {
   isDefault: boolean;
 };
 
+type AddressSuggestion = {
+  label: string;
+  addressLine1: string;
+  city: string;
+  stateRegion: string;
+  postcode: string;
+  country: string;
+};
+
+const AUSTRALIA_LABEL = "Australia";
+
 export default function CheckoutPage() {
   const { items } = useCart();
   const validItems = useMemo(() => items, [items]);
@@ -49,7 +60,7 @@ export default function CheckoutPage() {
     city: "",
     stateRegion: "",
     postcode: "",
-    country: "Australia",
+    country: AUSTRALIA_LABEL,
     phone: "",
     isDefault: false,
   });
@@ -64,10 +75,13 @@ export default function CheckoutPage() {
     city: "",
     stateRegion: "",
     postcode: "",
-    country: "Australia",
+    country: AUSTRALIA_LABEL,
     phone: "",
     isDefault: false,
   });
+  const [addressLookup, setAddressLookup] = useState("");
+  const [addressSuggestions, setAddressSuggestions] = useState<AddressSuggestion[]>([]);
+  const [lookupLoading, setLookupLoading] = useState(false);
 
   const loadAddresses = async () => {
     const response = await fetch("/api/account/addresses", { cache: "no-store" });
@@ -94,6 +108,38 @@ export default function CheckoutPage() {
     if (initial) setDiscountCode(initial);
   }, []);
 
+  useEffect(() => {
+    const query = addressLookup.trim();
+    if (query.length < 3) {
+      setAddressSuggestions([]);
+      setLookupLoading(false);
+      return;
+    }
+    let active = true;
+    const timer = globalThis.setTimeout(async () => {
+      try {
+        setLookupLoading(true);
+        const response = await fetch(`/api/address/autocomplete?q=${encodeURIComponent(query)}`, {
+          cache: "no-store",
+        });
+        const data = (await response.json()) as { suggestions?: AddressSuggestion[] };
+        if (!active) return;
+        setAddressSuggestions(data.suggestions ?? []);
+      } catch {
+        if (!active) return;
+        setAddressSuggestions([]);
+      } finally {
+        if (active) {
+          setLookupLoading(false);
+        }
+      }
+    }, 220);
+    return () => {
+      active = false;
+      globalThis.clearTimeout(timer);
+    };
+  }, [addressLookup]);
+
   const saveAddress = async () => {
     if (!newAddress.phone.trim()) {
       setQuoteError("Mobile number is required for shipping.");
@@ -102,7 +148,7 @@ export default function CheckoutPage() {
     const response = await fetch("/api/account/addresses", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(newAddress),
+      body: JSON.stringify({ ...newAddress, country: AUSTRALIA_LABEL }),
     });
     const data = await response.json();
     if (!response.ok) {
@@ -117,6 +163,19 @@ export default function CheckoutPage() {
     setQuoteMessage("Address saved.");
   };
 
+  const applyAddressSuggestion = (suggestion: AddressSuggestion) => {
+    setNewAddress((value) => ({
+      ...value,
+      addressLine1: suggestion.addressLine1 || value.addressLine1,
+      city: suggestion.city || value.city,
+      stateRegion: suggestion.stateRegion || value.stateRegion,
+      postcode: suggestion.postcode || value.postcode,
+      country: AUSTRALIA_LABEL,
+    }));
+    setAddressLookup(suggestion.label);
+    setAddressSuggestions([]);
+  };
+
   const saveEditedAddress = async () => {
     if (!editingAddress) return;
     if (!editDraft.phone.trim()) {
@@ -126,7 +185,7 @@ export default function CheckoutPage() {
     const response = await fetch("/api/account/addresses", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: editingAddress.id, ...editDraft }),
+      body: JSON.stringify({ id: editingAddress.id, ...editDraft, country: AUSTRALIA_LABEL }),
     });
     const data = await response.json();
     if (!response.ok) {
@@ -163,7 +222,7 @@ export default function CheckoutPage() {
               city: newAddress.city,
               stateRegion: newAddress.stateRegion,
               postcode: newAddress.postcode,
-              country: newAddress.country,
+              country: AUSTRALIA_LABEL,
               phone: newAddress.phone,
             }
           : undefined,
@@ -259,7 +318,7 @@ export default function CheckoutPage() {
                         city: address.city,
                         stateRegion: address.stateRegion,
                         postcode: address.postcode,
-                        country: address.country,
+                        country: AUSTRALIA_LABEL,
                         phone: address.phone ?? "",
                         isDefault: address.isDefault,
                       });
@@ -285,16 +344,37 @@ export default function CheckoutPage() {
           <p className="text-xs text-zinc-400">
             You can checkout directly with the form below. Saving the address is optional.
           </p>
-          <div className="grid gap-2 sm:grid-cols-2">
-            <input value={newAddress.firstName} onChange={(e) => setNewAddress((v) => ({ ...v, firstName: e.target.value }))} placeholder="First name" autoComplete="given-name" className="min-h-11 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base sm:text-sm" />
-            <input value={newAddress.lastName} onChange={(e) => setNewAddress((v) => ({ ...v, lastName: e.target.value }))} placeholder="Last name" autoComplete="family-name" className="min-h-11 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base sm:text-sm" />
-            <input value={newAddress.addressLine1} onChange={(e) => setNewAddress((v) => ({ ...v, addressLine1: e.target.value }))} placeholder="Address line 1" autoComplete="address-line1" className="min-h-11 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base sm:text-sm sm:col-span-2" />
-            <input value={newAddress.addressLine2} onChange={(e) => setNewAddress((v) => ({ ...v, addressLine2: e.target.value }))} placeholder="Address line 2 (optional)" autoComplete="address-line2" className="min-h-11 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base sm:text-sm sm:col-span-2" />
-            <input value={newAddress.city} onChange={(e) => setNewAddress((v) => ({ ...v, city: e.target.value }))} placeholder="City" autoComplete="address-level2" className="min-h-11 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base sm:text-sm" />
-            <input value={newAddress.stateRegion} onChange={(e) => setNewAddress((v) => ({ ...v, stateRegion: e.target.value }))} placeholder="State/region" autoComplete="address-level1" className="min-h-11 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base sm:text-sm" />
-            <input value={newAddress.postcode} onChange={(e) => setNewAddress((v) => ({ ...v, postcode: e.target.value }))} placeholder="Postcode" autoComplete="postal-code" className="min-h-11 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base sm:text-sm" />
-            <input value={newAddress.country} onChange={(e) => setNewAddress((v) => ({ ...v, country: e.target.value }))} placeholder="Country" autoComplete="country-name" className="min-h-11 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base sm:text-sm" />
-            <input value={newAddress.phone} onChange={(e) => setNewAddress((v) => ({ ...v, phone: e.target.value }))} placeholder="Mobile number (required)" autoComplete="tel" className="min-h-11 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base sm:text-sm sm:col-span-2" />
+          <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100">
+            Australia-only shipping. Country is fixed to {AUSTRALIA_LABEL} at checkout.
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <input value={newAddress.firstName} onChange={(e) => setNewAddress((v) => ({ ...v, firstName: e.target.value }))} placeholder="First name" autoComplete="given-name" name="firstName" className="min-h-12 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base" />
+            <input value={newAddress.lastName} onChange={(e) => setNewAddress((v) => ({ ...v, lastName: e.target.value }))} placeholder="Last name" autoComplete="family-name" name="lastName" className="min-h-12 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base" />
+            <input value={newAddress.phone} onChange={(e) => setNewAddress((v) => ({ ...v, phone: e.target.value }))} placeholder="Mobile number (required)" autoComplete="tel-national" inputMode="tel" name="phone" className="min-h-12 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base sm:col-span-2" />
+            <div className="relative sm:col-span-2">
+              <input value={addressLookup} onChange={(e) => setAddressLookup(e.target.value)} placeholder="Start typing your address (e.g. 2 Songbird Link)" autoComplete="street-address" className="min-h-12 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base" />
+              {lookupLoading ? <p className="mt-1 text-xs text-zinc-400">Looking up addresses...</p> : null}
+              {addressSuggestions.length ? (
+                <div className="absolute z-20 mt-1 max-h-64 w-full overflow-auto rounded-lg border border-white/10 bg-zinc-950/95 p-1 shadow-2xl">
+                  {addressSuggestions.map((suggestion) => (
+                    <button
+                      type="button"
+                      key={`${suggestion.label}-${suggestion.postcode}`}
+                      onClick={() => applyAddressSuggestion(suggestion)}
+                      className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-white/10"
+                    >
+                      {suggestion.label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            <input value={newAddress.addressLine1} onChange={(e) => setNewAddress((v) => ({ ...v, addressLine1: e.target.value }))} placeholder="Address line 1" autoComplete="address-line1" name="addressLine1" className="min-h-12 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base sm:col-span-2" />
+            <input value={newAddress.addressLine2} onChange={(e) => setNewAddress((v) => ({ ...v, addressLine2: e.target.value }))} placeholder="Address line 2 (optional)" autoComplete="address-line2" name="addressLine2" className="min-h-12 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base sm:col-span-2" />
+            <input value={newAddress.city} onChange={(e) => setNewAddress((v) => ({ ...v, city: e.target.value }))} placeholder="Suburb / City" autoComplete="address-level2" name="city" className="min-h-12 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base" />
+            <input value={newAddress.stateRegion} onChange={(e) => setNewAddress((v) => ({ ...v, stateRegion: e.target.value.toUpperCase() }))} placeholder="State" autoComplete="address-level1" name="stateRegion" className="min-h-12 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base" />
+            <input value={newAddress.postcode} onChange={(e) => setNewAddress((v) => ({ ...v, postcode: e.target.value }))} placeholder="Postcode" autoComplete="postal-code" inputMode="numeric" name="postcode" className="min-h-12 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base" />
+            <input value={AUSTRALIA_LABEL} readOnly aria-readonly autoComplete="country-name" className="min-h-12 w-full rounded-lg border border-emerald-400/20 bg-emerald-500/10 px-3 text-base text-emerald-50" />
           </div>
           <label className="flex items-center gap-2 text-sm text-zinc-300">
             <input
@@ -372,7 +452,7 @@ export default function CheckoutPage() {
                               city: newAddress.city,
                               stateRegion: newAddress.stateRegion,
                               postcode: newAddress.postcode,
-                              country: newAddress.country,
+                              country: AUSTRALIA_LABEL,
                               phone: newAddress.phone,
                             }
                           : undefined,
@@ -410,16 +490,16 @@ export default function CheckoutPage() {
               <h3 className="text-lg font-semibold">Edit delivery address</h3>
               <button onClick={() => setEditingAddress(null)} className="rounded border border-white/20 px-2 py-1 text-xs">Close</button>
             </div>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <input value={editDraft.firstName} onChange={(e) => setEditDraft((v) => ({ ...v, firstName: e.target.value }))} placeholder="First name" autoComplete="given-name" className="min-h-11 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base sm:text-sm" />
-              <input value={editDraft.lastName} onChange={(e) => setEditDraft((v) => ({ ...v, lastName: e.target.value }))} placeholder="Last name" autoComplete="family-name" className="min-h-11 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base sm:text-sm" />
-              <input value={editDraft.addressLine1} onChange={(e) => setEditDraft((v) => ({ ...v, addressLine1: e.target.value }))} placeholder="Address line 1" autoComplete="address-line1" className="min-h-11 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base sm:text-sm sm:col-span-2" />
-              <input value={editDraft.addressLine2} onChange={(e) => setEditDraft((v) => ({ ...v, addressLine2: e.target.value }))} placeholder="Address line 2" autoComplete="address-line2" className="min-h-11 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base sm:text-sm sm:col-span-2" />
-              <input value={editDraft.city} onChange={(e) => setEditDraft((v) => ({ ...v, city: e.target.value }))} placeholder="City" autoComplete="address-level2" className="min-h-11 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base sm:text-sm" />
-              <input value={editDraft.stateRegion} onChange={(e) => setEditDraft((v) => ({ ...v, stateRegion: e.target.value }))} placeholder="State/region" autoComplete="address-level1" className="min-h-11 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base sm:text-sm" />
-              <input value={editDraft.postcode} onChange={(e) => setEditDraft((v) => ({ ...v, postcode: e.target.value }))} placeholder="Postcode" autoComplete="postal-code" className="min-h-11 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base sm:text-sm" />
-              <input value={editDraft.country} onChange={(e) => setEditDraft((v) => ({ ...v, country: e.target.value }))} placeholder="Country" autoComplete="country-name" className="min-h-11 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base sm:text-sm" />
-              <input value={editDraft.phone} onChange={(e) => setEditDraft((v) => ({ ...v, phone: e.target.value }))} placeholder="Mobile number (required)" autoComplete="tel" className="min-h-11 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base sm:text-sm sm:col-span-2" />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <input value={editDraft.firstName} onChange={(e) => setEditDraft((v) => ({ ...v, firstName: e.target.value }))} placeholder="First name" autoComplete="given-name" className="min-h-12 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base" />
+              <input value={editDraft.lastName} onChange={(e) => setEditDraft((v) => ({ ...v, lastName: e.target.value }))} placeholder="Last name" autoComplete="family-name" className="min-h-12 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base" />
+              <input value={editDraft.phone} onChange={(e) => setEditDraft((v) => ({ ...v, phone: e.target.value }))} placeholder="Mobile number (required)" autoComplete="tel-national" className="min-h-12 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base sm:col-span-2" />
+              <input value={editDraft.addressLine1} onChange={(e) => setEditDraft((v) => ({ ...v, addressLine1: e.target.value }))} placeholder="Address line 1" autoComplete="address-line1" className="min-h-12 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base sm:col-span-2" />
+              <input value={editDraft.addressLine2} onChange={(e) => setEditDraft((v) => ({ ...v, addressLine2: e.target.value }))} placeholder="Address line 2" autoComplete="address-line2" className="min-h-12 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base sm:col-span-2" />
+              <input value={editDraft.city} onChange={(e) => setEditDraft((v) => ({ ...v, city: e.target.value }))} placeholder="Suburb / City" autoComplete="address-level2" className="min-h-12 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base" />
+              <input value={editDraft.stateRegion} onChange={(e) => setEditDraft((v) => ({ ...v, stateRegion: e.target.value.toUpperCase() }))} placeholder="State" autoComplete="address-level1" className="min-h-12 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base" />
+              <input value={editDraft.postcode} onChange={(e) => setEditDraft((v) => ({ ...v, postcode: e.target.value }))} placeholder="Postcode" autoComplete="postal-code" className="min-h-12 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base" />
+              <input value={AUSTRALIA_LABEL} readOnly aria-readonly autoComplete="country-name" className="min-h-12 w-full rounded-lg border border-emerald-400/20 bg-emerald-500/10 px-3 text-base text-emerald-50" />
             </div>
             <button onClick={saveEditedAddress} className="mt-3 min-h-11 w-full rounded-xl bg-zinc-100 px-4 py-2 text-sm font-semibold text-zinc-900 sm:w-auto">
               Save changes

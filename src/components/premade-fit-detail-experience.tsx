@@ -91,7 +91,7 @@ export function PremadeFitDetailExperience({
           size: row.variant.size,
           color: row.variant.color,
           name: row.item.productName,
-          image: colorImage,
+          image: row.item.itemMainImage ?? colorImage,
           unitPrice: row.variant.price,
           shippingRateAUD: row.item.shippingRateAUD,
           quantity: 1,
@@ -175,7 +175,13 @@ export function PremadeFitDetailExperience({
               <article key={item.id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
                 <div className="grid gap-4 md:grid-cols-[120px_1fr]">
                   <div className="relative h-28 overflow-hidden rounded-xl border border-white/10 bg-black/30">
-                    <Image src={colorImages.mainImage} alt={item.productName} fill sizes="120px" className="object-cover" />
+                    <Image
+                      src={item.itemMainImage ?? colorImages.mainImage}
+                      alt={item.productName}
+                      fill
+                      sizes="120px"
+                      className="object-cover"
+                    />
                   </div>
                   <div className="space-y-2">
                     <Link href={`/product/${item.productSlug}`} className="text-lg font-semibold hover:underline">

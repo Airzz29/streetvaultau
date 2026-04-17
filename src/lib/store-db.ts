@@ -75,6 +75,7 @@ type DbPremadeFitItemRow = {
   id: string;
   fit_id: string;
   product_id: string;
+  item_main_image: string | null;
   selection_mode: PremadeFitSelectionMode;
   allowed_colors_json: string;
   allowed_sizes_json: string;
@@ -186,6 +187,7 @@ function init() {
       id TEXT PRIMARY KEY,
       fit_id TEXT NOT NULL,
       product_id TEXT NOT NULL,
+      item_main_image TEXT,
       selection_mode TEXT NOT NULL DEFAULT 'fixed',
       allowed_colors_json TEXT NOT NULL DEFAULT '[]',
       allowed_sizes_json TEXT NOT NULL DEFAULT '[]',
@@ -463,6 +465,7 @@ function init() {
   addColumnIfMissing("users", "last_active_at TEXT", "last_active_at");
   addColumnIfMissing("contact_messages", "source_type TEXT NOT NULL DEFAULT 'general'", "source_type");
   addColumnIfMissing("contact_messages", "order_id TEXT", "order_id");
+  addColumnIfMissing("premade_fit_items", "item_main_image TEXT", "item_main_image");
 
   db.prepare(
     `INSERT OR IGNORE INTO store_settings (id, low_stock_threshold, shipping_flat_rate) VALUES ('default', 3, 10)`
@@ -853,7 +856,7 @@ export function listPremadeFits(options?: { includeInactive?: boolean }): Premad
   const fitPlaceholders = fitIds.map(() => "?").join(",");
   const fitItemRows = db
     .prepare(
-      `SELECT id, fit_id, product_id, selection_mode, allowed_colors_json, allowed_sizes_json, default_variant_id, sort_order
+      `SELECT id, fit_id, product_id, item_main_image, selection_mode, allowed_colors_json, allowed_sizes_json, default_variant_id, sort_order
        FROM premade_fit_items
        WHERE fit_id IN (${fitPlaceholders})
        ORDER BY sort_order ASC`
@@ -903,6 +906,7 @@ export function listPremadeFits(options?: { includeInactive?: boolean }): Premad
       productName: product.name,
       productDescription: product.description,
       productMainImage: product.mainImage ?? product.images[0],
+      itemMainImage: fitItem.item_main_image,
       productImages: product.images,
       productColorImageGroups: product.colorImageGroups ?? [],
       shippingRateAUD: product.shippingRateAUD,
@@ -955,7 +959,12 @@ export function listPremadeFitCards(): PremadeFitCard[] {
         slug: fit.slug,
         name: fit.name,
         description: fit.description,
-        image: fit.coverImage || fit.galleryImages[0] || fit.items[0]?.productMainImage || "/favicon.ico",
+        image:
+          fit.coverImage ||
+          fit.galleryImages[0] ||
+          fit.items[0]?.itemMainImage ||
+          fit.items[0]?.productMainImage ||
+          "/favicon.ico",
         itemCount: fit.items.length,
         minPriceAUD,
         compareAtPriceAUD: compareAtPriceAUD > minPriceAUD ? compareAtPriceAUD : null,
@@ -975,6 +984,7 @@ export function createPremadeFit(input: {
   featured: boolean;
   items: Array<{
     productId: string;
+    itemMainImage?: string | null;
     selectionMode: PremadeFitSelectionMode;
     allowedColors: string[];
     allowedSizes: string[];
@@ -1003,12 +1013,13 @@ export function createPremadeFit(input: {
     for (const item of input.items) {
       db.prepare(
         `INSERT INTO premade_fit_items (
-          id, fit_id, product_id, selection_mode, allowed_colors_json, allowed_sizes_json, default_variant_id, sort_order, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          id, fit_id, product_id, item_main_image, selection_mode, allowed_colors_json, allowed_sizes_json, default_variant_id, sort_order, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).run(
         crypto.randomUUID(),
         fitId,
         item.productId,
+        item.itemMainImage?.trim() || null,
         item.selectionMode,
         JSON.stringify(item.allowedColors),
         JSON.stringify(item.allowedSizes),
@@ -1034,6 +1045,7 @@ export function updatePremadeFit(
     featured: boolean;
     items: Array<{
       productId: string;
+      itemMainImage?: string | null;
       selectionMode: PremadeFitSelectionMode;
       allowedColors: string[];
       allowedSizes: string[];
@@ -1063,12 +1075,13 @@ export function updatePremadeFit(
     for (const item of input.items) {
       db.prepare(
         `INSERT INTO premade_fit_items (
-          id, fit_id, product_id, selection_mode, allowed_colors_json, allowed_sizes_json, default_variant_id, sort_order, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          id, fit_id, product_id, item_main_image, selection_mode, allowed_colors_json, allowed_sizes_json, default_variant_id, sort_order, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).run(
         crypto.randomUUID(),
         fitId,
         item.productId,
+        item.itemMainImage?.trim() || null,
         item.selectionMode,
         JSON.stringify(item.allowedColors),
         JSON.stringify(item.allowedSizes),

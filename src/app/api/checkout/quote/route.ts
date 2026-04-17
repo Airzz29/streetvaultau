@@ -21,6 +21,11 @@ type ShippingInput = {
   phone?: string;
 };
 
+function isAustraliaOnlyCountry(value?: string | null) {
+  const normalized = (value ?? "").trim().toLowerCase();
+  return normalized === "australia" || normalized === "au";
+}
+
 export async function POST(request: NextRequest) {
   const user = await requireUser();
   if (!user) return NextResponse.json({ error: "Login required before checkout." }, { status: 401 });
@@ -33,6 +38,9 @@ export async function POST(request: NextRequest) {
   };
   if (!body.items?.length) return NextResponse.json({ error: "Cart is empty." }, { status: 400 });
   let address = body.addressId ? getUserAddressById(user.id, body.addressId) : null;
+  if (address && !isAustraliaOnlyCountry(address.country)) {
+    return NextResponse.json({ error: "Checkout currently supports Australia shipping only." }, { status: 400 });
+  }
   if (!address && body.shippingAddress) {
     const input = body.shippingAddress;
     if (
@@ -49,6 +57,9 @@ export async function POST(request: NextRequest) {
     if (!input.phone?.trim()) {
       return NextResponse.json({ error: "Mobile number is required for shipping." }, { status: 400 });
     }
+    if (!isAustraliaOnlyCountry(input.country)) {
+      return NextResponse.json({ error: "Checkout currently supports Australia shipping only." }, { status: 400 });
+    }
     if (body.saveAddressForFuture) {
       const updatedAddresses = createUserAddress(user.id, {
         firstName: input.firstName,
@@ -58,7 +69,7 @@ export async function POST(request: NextRequest) {
         city: input.city,
         stateRegion: input.stateRegion,
         postcode: input.postcode,
-        country: input.country,
+        country: "Australia",
         phone: input.phone,
         isDefault: false,
       });
@@ -82,7 +93,7 @@ export async function POST(request: NextRequest) {
         city: input.city.trim(),
         stateRegion: input.stateRegion.trim(),
         postcode: input.postcode.trim(),
-        country: input.country.trim(),
+        country: "Australia",
         phone: input.phone.trim(),
         isDefault: false,
       };

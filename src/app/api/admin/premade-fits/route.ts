@@ -10,6 +10,7 @@ import { PremadeFitSelectionMode } from "@/types/premade-fit";
 
 type FitItemInput = {
   productId: string;
+  itemMainImage?: string | null;
   selectionMode?: PremadeFitSelectionMode;
   allowedColors?: string[];
   allowedSizes?: string[];
@@ -33,6 +34,7 @@ function normalizeItems(items: FitItemInput[] = []) {
   return items
     .map((item, index) => ({
       productId: item.productId,
+      itemMainImage: item.itemMainImage ?? null,
       selectionMode: item.selectionMode ?? "fixed",
       allowedColors: item.allowedColors ?? [],
       allowedSizes: item.allowedSizes ?? [],
