@@ -13,6 +13,7 @@ import {
   ProductWithVariants,
 } from "@/types/product";
 import { Order, OrderStatus } from "@/types/order";
+import { PremadeFit, PremadeFitCard, PremadeFitSelectionMode } from "@/types/premade-fit";
 
 type DbProductRow = {
   id: string;
@@ -55,6 +56,30 @@ type DbVariantRow = {
   low_stock_threshold: number | null;
   stock_notes: string | null;
   updated_at: string;
+};
+
+type DbPremadeFitRow = {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  cover_image: string;
+  gallery_images_json: string;
+  active: number;
+  featured: number;
+  created_at: string;
+  updated_at: string;
+};
+
+type DbPremadeFitItemRow = {
+  id: string;
+  fit_id: string;
+  product_id: string;
+  selection_mode: PremadeFitSelectionMode;
+  allowed_colors_json: string;
+  allowed_sizes_json: string;
+  default_variant_id: string | null;
+  sort_order: number;
 };
 
 type DbUserRow = {
@@ -100,7 +125,15 @@ function hasColumn(table: string, column: string) {
 
 function addColumnIfMissing(table: string, columnDef: string, columnName: string) {
   if (!hasColumn(table, columnName)) {
-    db.exec(`ALTER TABLE ${table} ADD COLUMN ${columnDef}`);
+    try {
+      db.exec(`ALTER TABLE ${table} ADD COLUMN ${columnDef}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message.toLowerCase() : "";
+      // Build/runtime can initialize DB in parallel; ignore benign duplicate-column races.
+      if (!message.includes("duplicate column name")) {
+        throw error;
+      }
+    }
   }
 }
 
@@ -133,6 +166,34 @@ function init() {
       price REAL NOT NULL,
       stock INTEGER NOT NULL,
       sku TEXT UNIQUE NOT NULL,
+      FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS premade_fits (
+      id TEXT PRIMARY KEY,
+      slug TEXT UNIQUE NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL,
+      cover_image TEXT NOT NULL,
+      gallery_images_json TEXT NOT NULL,
+      active INTEGER NOT NULL DEFAULT 1,
+      featured INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS premade_fit_items (
+      id TEXT PRIMARY KEY,
+      fit_id TEXT NOT NULL,
+      product_id TEXT NOT NULL,
+      selection_mode TEXT NOT NULL DEFAULT 'fixed',
+      allowed_colors_json TEXT NOT NULL DEFAULT '[]',
+      allowed_sizes_json TEXT NOT NULL DEFAULT '[]',
+      default_variant_id TEXT,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (fit_id) REFERENCES premade_fits(id) ON DELETE CASCADE,
       FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
     );
 
@@ -425,6 +486,8 @@ function init() {
     CREATE INDEX IF NOT EXISTS idx_product_reviews_status_created ON product_reviews(status, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_pending_email_expires ON pending_email_verifications(expires_at);
     CREATE INDEX IF NOT EXISTS idx_admin_invites_email_expires ON admin_invites(email, expires_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_premade_fits_active_featured ON premade_fits(active, featured, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_premade_fit_items_fit_order ON premade_fit_items(fit_id, sort_order ASC);
   `);
   const seeded = db
     .prepare("SELECT value FROM app_meta WHERE key='seeded_products_v1'")
@@ -760,6 +823,267 @@ export function getVariantById(variantId: string) {
     | DbVariantRow
     | undefined;
   return variant ? mapVariant(variant) : null;
+}
+
+function mapPremadeFitRow(row: DbPremadeFitRow) {
+  return {
+    id: row.id,
+    slug: row.slug,
+    name: row.name,
+    description: row.description,
+    coverImage: row.cover_image,
+    galleryImages: JSON.parse(row.gallery_images_json) as string[],
+    active: Boolean(row.active),
+    featured: Boolean(row.featured),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function listPremadeFits(options?: { includeInactive?: boolean }): PremadeFit[] {
+  const includeInactive = Boolean(options?.includeInactive);
+  const fitRows = (includeInactive
+    ? db.prepare("SELECT * FROM premade_fits ORDER BY featured DESC, created_at DESC").all()
+    : db
+        .prepare("SELECT * FROM premade_fits WHERE active=1 ORDER BY featured DESC, created_at DESC")
+        .all()) as DbPremadeFitRow[];
+  if (!fitRows.length) return [];
+
+  const fitIds = fitRows.map((fit) => fit.id);
+  const fitPlaceholders = fitIds.map(() => "?").join(",");
+  const fitItemRows = db
+    .prepare(
+      `SELECT id, fit_id, product_id, selection_mode, allowed_colors_json, allowed_sizes_json, default_variant_id, sort_order
+       FROM premade_fit_items
+       WHERE fit_id IN (${fitPlaceholders})
+       ORDER BY sort_order ASC`
+    )
+    .all(...fitIds) as DbPremadeFitItemRow[];
+  const productIds = Array.from(new Set(fitItemRows.map((item) => item.product_id)));
+  if (!productIds.length) {
+    return fitRows.map((row) => ({ ...mapPremadeFitRow(row), items: [] }));
+  }
+  const productPlaceholders = productIds.map(() => "?").join(",");
+  const productRows = db
+    .prepare(`SELECT * FROM products WHERE id IN (${productPlaceholders})`)
+    .all(...productIds) as DbProductRow[];
+  const variantRows = db
+    .prepare(`SELECT * FROM variants WHERE product_id IN (${productPlaceholders})`)
+    .all(...productIds) as DbVariantRow[];
+  const productById = new Map(productRows.map((row) => [row.id, mapProduct(row)]));
+  const variantsByProductId = new Map<string, ReturnType<typeof mapVariant>[]>();
+  for (const variant of variantRows) {
+    const existing = variantsByProductId.get(variant.product_id) ?? [];
+    existing.push(mapVariant(variant));
+    variantsByProductId.set(variant.product_id, existing);
+  }
+  const itemsByFitId = new Map<string, PremadeFit["items"]>();
+  for (const fitItem of fitItemRows) {
+    const product = productById.get(fitItem.product_id);
+    if (!product) continue;
+    const productVariants = variantsByProductId.get(product.id) ?? [];
+    const allowedColorsRaw = JSON.parse(fitItem.allowed_colors_json) as string[];
+    const allowedSizesRaw = JSON.parse(fitItem.allowed_sizes_json) as string[];
+    const allowedColors = allowedColorsRaw.length
+      ? allowedColorsRaw
+      : Array.from(new Set(productVariants.map((variant) => variant.color)));
+    const allowedSizes = allowedSizesRaw.length
+      ? allowedSizesRaw
+      : Array.from(new Set(productVariants.map((variant) => variant.size)));
+    const filteredVariants = productVariants.filter(
+      (variant) =>
+        (!allowedColors.length || allowedColors.includes(variant.color)) &&
+        (!allowedSizes.length || allowedSizes.includes(variant.size))
+    );
+    const entry = {
+      id: fitItem.id,
+      fitId: fitItem.fit_id,
+      productId: product.id,
+      productSlug: product.slug,
+      productName: product.name,
+      productDescription: product.description,
+      productMainImage: product.mainImage ?? product.images[0],
+      productImages: product.images,
+      productColorImageGroups: product.colorImageGroups ?? [],
+      shippingRateAUD: product.shippingRateAUD,
+      selectionMode: fitItem.selection_mode,
+      allowedColors,
+      allowedSizes,
+      defaultVariantId: fitItem.default_variant_id,
+      sortOrder: fitItem.sort_order,
+      variants: filteredVariants,
+    };
+    const existing = itemsByFitId.get(fitItem.fit_id) ?? [];
+    existing.push(entry);
+    itemsByFitId.set(fitItem.fit_id, existing);
+  }
+  return fitRows.map((fit) => ({
+    ...mapPremadeFitRow(fit),
+    items: itemsByFitId.get(fit.id) ?? [],
+  }));
+}
+
+export function getPremadeFitBySlug(slug: string, options?: { includeInactive?: boolean }) {
+  const fit = listPremadeFits({ includeInactive: options?.includeInactive }).find((entry) => entry.slug === slug);
+  return fit ?? null;
+}
+
+export function listPremadeFitCards(): PremadeFitCard[] {
+  return listPremadeFits()
+    .map((fit) => {
+      const minPriceAUD = fit.items.reduce((sum, item) => {
+        const minItem = item.variants.length
+          ? Math.min(...item.variants.map((variant) => variant.price))
+          : 0;
+        return sum + minItem;
+      }, 0);
+      const compareAtPriceAUD = fit.items.reduce((sum, item) => {
+        const hasVariant = item.variants.length > 0;
+        const maxItem = hasVariant ? Math.max(...item.variants.map((variant) => variant.price)) : 0;
+        return sum + maxItem;
+      }, 0);
+      const totalStock = fit.items.reduce((sum, item) => {
+        const itemStock = item.selectionMode === "fixed"
+          ? item.variants.find((variant) => variant.id === item.defaultVariantId)?.stock ??
+            item.variants[0]?.stock ??
+            0
+          : item.variants.reduce((inner, variant) => inner + variant.stock, 0);
+        return sum + itemStock;
+      }, 0);
+      return {
+        id: fit.id,
+        slug: fit.slug,
+        name: fit.name,
+        description: fit.description,
+        image: fit.coverImage || fit.galleryImages[0] || fit.items[0]?.productMainImage || "/favicon.ico",
+        itemCount: fit.items.length,
+        minPriceAUD,
+        compareAtPriceAUD: compareAtPriceAUD > minPriceAUD ? compareAtPriceAUD : null,
+        totalStock,
+      };
+    })
+    .sort((a, b) => b.totalStock - a.totalStock);
+}
+
+export function createPremadeFit(input: {
+  slug: string;
+  name: string;
+  description: string;
+  coverImage: string;
+  galleryImages: string[];
+  active: boolean;
+  featured: boolean;
+  items: Array<{
+    productId: string;
+    selectionMode: PremadeFitSelectionMode;
+    allowedColors: string[];
+    allowedSizes: string[];
+    defaultVariantId?: string | null;
+    sortOrder: number;
+  }>;
+}) {
+  const now = nowISO();
+  const fitId = crypto.randomUUID();
+  db.transaction(() => {
+    db.prepare(
+      `INSERT INTO premade_fits (id, slug, name, description, cover_image, gallery_images_json, active, featured, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      fitId,
+      input.slug.trim(),
+      input.name.trim(),
+      input.description.trim(),
+      input.coverImage.trim(),
+      JSON.stringify(input.galleryImages.filter(Boolean)),
+      input.active ? 1 : 0,
+      input.featured ? 1 : 0,
+      now,
+      now
+    );
+    for (const item of input.items) {
+      db.prepare(
+        `INSERT INTO premade_fit_items (
+          id, fit_id, product_id, selection_mode, allowed_colors_json, allowed_sizes_json, default_variant_id, sort_order, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(
+        crypto.randomUUID(),
+        fitId,
+        item.productId,
+        item.selectionMode,
+        JSON.stringify(item.allowedColors),
+        JSON.stringify(item.allowedSizes),
+        item.defaultVariantId ?? null,
+        item.sortOrder,
+        now,
+        now
+      );
+    }
+  })();
+  return getPremadeFitBySlug(input.slug, { includeInactive: true });
+}
+
+export function updatePremadeFit(
+  fitId: string,
+  input: {
+    slug: string;
+    name: string;
+    description: string;
+    coverImage: string;
+    galleryImages: string[];
+    active: boolean;
+    featured: boolean;
+    items: Array<{
+      productId: string;
+      selectionMode: PremadeFitSelectionMode;
+      allowedColors: string[];
+      allowedSizes: string[];
+      defaultVariantId?: string | null;
+      sortOrder: number;
+    }>;
+  }
+) {
+  const now = nowISO();
+  db.transaction(() => {
+    db.prepare(
+      `UPDATE premade_fits
+       SET slug=?, name=?, description=?, cover_image=?, gallery_images_json=?, active=?, featured=?, updated_at=?
+       WHERE id=?`
+    ).run(
+      input.slug.trim(),
+      input.name.trim(),
+      input.description.trim(),
+      input.coverImage.trim(),
+      JSON.stringify(input.galleryImages.filter(Boolean)),
+      input.active ? 1 : 0,
+      input.featured ? 1 : 0,
+      now,
+      fitId
+    );
+    db.prepare("DELETE FROM premade_fit_items WHERE fit_id=?").run(fitId);
+    for (const item of input.items) {
+      db.prepare(
+        `INSERT INTO premade_fit_items (
+          id, fit_id, product_id, selection_mode, allowed_colors_json, allowed_sizes_json, default_variant_id, sort_order, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(
+        crypto.randomUUID(),
+        fitId,
+        item.productId,
+        item.selectionMode,
+        JSON.stringify(item.allowedColors),
+        JSON.stringify(item.allowedSizes),
+        item.defaultVariantId ?? null,
+        item.sortOrder,
+        now,
+        now
+      );
+    }
+  })();
+  return listPremadeFits({ includeInactive: true }).find((fit) => fit.id === fitId) ?? null;
+}
+
+export function deletePremadeFit(fitId: string) {
+  db.prepare("DELETE FROM premade_fits WHERE id=?").run(fitId);
 }
 
 export function getStoreSettings() {
