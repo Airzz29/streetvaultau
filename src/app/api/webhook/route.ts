@@ -30,55 +30,59 @@ export async function POST(request: NextRequest) {
       });
       if (result.created && result.orderId) {
         const order = getOrderById(result.orderId);
-        const to = order?.customerEmail ?? session.customer_details?.email ?? null;
-        if (order && to) {
-          try {
-            await sendOrderConfirmationEmail({
-              to,
-              customerName: order.customerName,
-              orderId: order.id,
-              items: order.items.map((item) => ({
-                name: item.name,
-                size: item.size,
-                quantity: item.quantity,
-                unitPrice: item.unitPrice,
-                image: item.image,
-              })),
-              totalAUD: order.revenueAUD,
-            });
-          } catch (error) {
-            console.error("Order confirmation email error", error);
-          }
-        }
-        if (order) {
-          const adminRecipients = listAdminUsers()
-            .map((admin) => admin.email)
-            .filter((email) => Boolean(email?.trim()));
-          if (adminRecipients.length) {
+        const fallbackEmail = session.customer_details?.email ?? null;
+        const to = order?.customerEmail ?? fallbackEmail ?? null;
+        // Respond to Stripe quickly; send mail after (avoids webhook timeouts under burst traffic).
+        void (async () => {
+          if (order && to) {
             try {
-              await Promise.allSettled(
-                adminRecipients.map((email) =>
-                  sendAdminNewOrderAlertEmail({
-                    to: email,
-                    orderId: order.id,
-                    customerName: order.customerName,
-                    customerEmail: order.customerEmail,
-                    totalAUD: order.revenueAUD,
-                    items: order.items.map((item) => ({
-                      name: item.name,
-                      size: item.size,
-                      color: item.color,
-                      quantity: item.quantity,
-                      image: item.image,
-                    })),
-                  })
-                )
-              );
+              await sendOrderConfirmationEmail({
+                to,
+                customerName: order.customerName,
+                orderId: order.id,
+                items: order.items.map((item) => ({
+                  name: item.name,
+                  size: item.size,
+                  quantity: item.quantity,
+                  unitPrice: item.unitPrice,
+                  image: item.image,
+                })),
+                totalAUD: order.revenueAUD,
+              });
             } catch (error) {
-              console.error("Admin order alert email error", error);
+              console.error("Order confirmation email error", error);
             }
           }
-        }
+          if (order) {
+            const adminRecipients = listAdminUsers()
+              .map((admin) => admin.email)
+              .filter((email) => Boolean(email?.trim()));
+            if (adminRecipients.length) {
+              try {
+                await Promise.allSettled(
+                  adminRecipients.map((email) =>
+                    sendAdminNewOrderAlertEmail({
+                      to: email,
+                      orderId: order.id,
+                      customerName: order.customerName,
+                      customerEmail: order.customerEmail,
+                      totalAUD: order.revenueAUD,
+                      items: order.items.map((item) => ({
+                        name: item.name,
+                        size: item.size,
+                        color: item.color,
+                        quantity: item.quantity,
+                        image: item.image,
+                      })),
+                    })
+                  )
+                );
+              } catch (error) {
+                console.error("Admin order alert email error", error);
+              }
+            }
+          }
+        })();
       }
     }
 

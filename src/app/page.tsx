@@ -34,8 +34,8 @@ export default function Home() {
   const fallbackPool = products.filter(
     (item) => !bestSellerPool.some((bestSeller) => bestSeller.id === item.id)
   );
-  const topSellers = [...bestSellerPool, ...fallbackPool].slice(0, 6);
-  const featuredFits = listPremadeFitCards().slice(0, 3);
+  const topSellers = [...bestSellerPool, ...fallbackPool].slice(0, 4);
+  const featuredFits = listPremadeFitCards().slice(0, 2);
   const latestReviews = listApprovedReviews(5);
 
   return (
@@ -89,14 +89,22 @@ export default function Home() {
       </section>
 
       <section className="space-y-4 fade-slide-up">
-        <div className="flex items-end justify-between">
-          <h2 className="text-2xl font-semibold sm:text-3xl">Premade Fits</h2>
-          <Link href="/premade-fits" className="text-sm text-zinc-300 hover:text-zinc-100">
-            View all fits
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-2xl font-semibold sm:text-3xl">Premade Fits</h2>
+            <p className="mt-1 max-w-xl text-sm text-zinc-400">
+              Curated outfits at bundle pricing — pay less than buying each piece on its own.
+            </p>
+          </div>
+          <Link
+            href="/premade-fits"
+            className="inline-flex w-full shrink-0 items-center justify-center rounded-xl bg-emerald-500/90 px-5 py-3 text-center text-sm font-semibold text-emerald-950 shadow-lg shadow-emerald-950/30 hover:bg-emerald-400 sm:w-auto"
+          >
+            View more premade fits
           </Link>
         </div>
         {featuredFits.length ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2">
             {featuredFits.map((fit) => (
               <PremadeFitCardView key={fit.id} fit={fit} />
             ))}

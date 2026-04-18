@@ -25,9 +25,15 @@ export function PremadeFitCardView({ fit }: { fit: PremadeFitCard }) {
         <p className="text-xs uppercase tracking-[0.15em] text-zinc-500">Premade Fit</p>
         <h3 className="text-lg font-semibold text-zinc-100">{fit.name}</h3>
         <p className="line-clamp-2 text-sm text-zinc-400">{fit.description}</p>
-        <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-emerald-400/90">
-          Bundle pricing · cheaper than buying separately
-        </p>
+        {fit.savingsAUD > 0 ? (
+          <p className="rounded-lg border border-emerald-500/35 bg-emerald-950/50 px-3 py-2 text-sm font-semibold leading-snug text-emerald-100">
+            Buy this bundle · save {formatPrice(fit.savingsAUD)} vs buying all {fit.itemCount} items separately
+          </p>
+        ) : (
+          <p className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-zinc-400">
+            Bundle checkout · one price for the full outfit
+          </p>
+        )}
         <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
           <span className="text-zinc-300">{fit.itemCount} items</span>
           <div className="text-right">
@@ -38,7 +44,7 @@ export function PremadeFitCardView({ fit }: { fit: PremadeFitCard }) {
           </div>
         </div>
         {fit.savingsAUD > 0 ? (
-          <p className="text-xs text-emerald-300">Save {formatPrice(fit.savingsAUD)} with this fit</p>
+          <p className="text-xs text-emerald-300/90">You keep the discount when you add this fit to cart.</p>
         ) : null}
       </div>
     </Link>
