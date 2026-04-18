@@ -1,5 +1,7 @@
 /** Fulfillment routing (display pricing + order channel). Stock rules live in store-db. */
 
+import { canonicalShippingCountryCode } from "@/lib/currency-config";
+
 export type FulfillmentType = "physical" | "dropship";
 export type FulfillmentChannel = "local" | "dropship";
 
@@ -9,10 +11,12 @@ export type LineFulfillmentOpts = {
   requestedQty: number;
 };
 
-/** True if country string represents Australia (English label or ISO). */
+/** True if country string represents Australia (full name, ISO, or common aliases). */
 export function isAustraliaShipping(country: string | null | undefined): boolean {
-  const n = (country ?? "").trim().toLowerCase();
-  return n === "australia" || n === "au";
+  if (!country?.trim()) return false;
+  const n = country.trim().toLowerCase();
+  if (n === "australia" || n === "au") return true;
+  return canonicalShippingCountryCode(country) === "AU";
 }
 
 /**

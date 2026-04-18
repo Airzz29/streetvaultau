@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
 import { CartItem } from "@/types/product";
 import {
-  buildPricedCheckoutItems,
+  computeCheckoutPricingSummary,
   computeShippingForItems,
   createUserAddress,
   getUserAddressById,
+  getVariantById,
   upsertCheckoutDraft,
   validateCartStockForCheckout,
   validateDiscountCode,
@@ -113,8 +114,13 @@ export async function POST(request: NextRequest) {
     }
 
     let pricedItems: CartItem[];
+    let globalSurchargeAUD = 0;
+    let retailSubtotalAUD = 0;
     try {
-      ({ pricedItems } = buildPricedCheckoutItems(body.items, address.country));
+      const summary = computeCheckoutPricingSummary(body.items, address.country);
+      pricedItems = summary.pricedItems;
+      globalSurchargeAUD = summary.globalSurchargeAUD;
+      retailSubtotalAUD = summary.retailSubtotalAUD;
     } catch {
       return NextResponse.json({ error: "Cart could not be priced." }, { status: 400 });
     }
@@ -142,18 +148,26 @@ export async function POST(request: NextRequest) {
     const discountedItems = applyDiscountAcrossItems(pricedItems, discountAmountAUD);
 
     const origin = resolveAppBaseUrl(request);
-    const lineItems = discountedItems.map((cartItem) => ({
-      quantity: cartItem.quantity,
-      price_data: {
-        currency: "aud",
-        product_data: buildStripeProductData({
-          name: `${cartItem.name} (${cartItem.size})`,
-          image: cartItem.image,
-          origin,
-        }),
-        unit_amount: cartItem.discountedUnitAmountCents,
-      },
-    }));
+    const lineItems = discountedItems.map((cartItem) => {
+      const variant = getVariantById(cartItem.variantId);
+      const baseAud = variant?.price ?? 0;
+      const unitIncludesGlobal = cartItem.unitPrice > baseAud + 0.004;
+      const title = unitIncludesGlobal
+        ? `${cartItem.name} (${cartItem.size}) · incl. global fulfillment`
+        : `${cartItem.name} (${cartItem.size})`;
+      return {
+        quantity: cartItem.quantity,
+        price_data: {
+          currency: "aud",
+          product_data: buildStripeProductData({
+            name: title,
+            image: cartItem.image,
+            origin,
+          }),
+          unit_amount: cartItem.discountedUnitAmountCents,
+        },
+      };
+    });
     const shippingTotal = computeShippingForItems(pricedItems);
     if (shippingTotal > 0) {
       lineItems.push({
@@ -180,6 +194,10 @@ export async function POST(request: NextRequest) {
       payment_method_types: ["card"],
       line_items: lineItems,
       return_url: `${origin}/success?session_id={CHECKOUT_SESSION_ID}`,
+      metadata: {
+        global_surcharge_aud: globalSurchargeAUD.toFixed(2),
+        retail_subtotal_aud: retailSubtotalAUD.toFixed(2),
+      },
     };
 
     const session = await stripe.checkout.sessions.create(sessionParams);

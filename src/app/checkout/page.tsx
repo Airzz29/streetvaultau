@@ -549,17 +549,23 @@ export default function CheckoutPage() {
             </div>
             {quote ? (
               <div className="mt-2 space-y-1 text-sm text-zinc-300">
-                {quote.retailSubtotalAUD != null && quote.globalSurchargeAUD != null && quote.globalSurchargeAUD > 0 ? (
-                  <>
-                    <p className="text-xs text-zinc-500">
-                      Item retail (AUD base): {formatPrice(quote.retailSubtotalAUD)}
-                    </p>
-                    <p className="text-sky-200">
-                      Global fulfillment surcharge: +{formatPrice(quote.globalSurchargeAUD)}
-                    </p>
-                  </>
+                {quote.retailSubtotalAUD != null ? (
+                  <p className="text-xs text-zinc-500">
+                    Items at retail (AUD base, before global add-on): {formatPrice(quote.retailSubtotalAUD)}
+                  </p>
                 ) : null}
-                <p>Subtotal: {formatPrice(quote.subtotalAUD)}</p>
+                {quote.globalSurchargeAUD != null && quote.globalSurchargeAUD > 0 ? (
+                  <p className="text-sky-200">
+                    Global fulfillment add-on (included in subtotal below): +{formatPrice(quote.globalSurchargeAUD)}
+                  </p>
+                ) : quote.retailSubtotalAUD != null ? (
+                  <p className="text-xs text-zinc-500">
+                    Global fulfillment add-on: none — local AU stock or retail-only pricing for this cart.
+                  </p>
+                ) : null}
+                <p>
+                  Subtotal (charged in AUD — includes any global line pricing): {formatPrice(quote.subtotalAUD)}
+                </p>
                 <p>Shipping: {formatPrice(quote.shippingAUD)}</p>
                 <p className={quote.discountAmountAUD > 0 ? "text-emerald-300" : ""}>
                   Discount: -{formatPrice(quote.discountAmountAUD)}
