@@ -4,6 +4,8 @@ import { getProductBySlug, listApprovedReviewsByProductId, listProductsForCards 
 import { ProductCardData, ProductTag } from "@/types/product";
 import { ProductDetailExperience } from "@/components/product-detail-experience";
 
+export const dynamic = "force-dynamic";
+
 type ProductPageProps = {
   params: {
     id: string;

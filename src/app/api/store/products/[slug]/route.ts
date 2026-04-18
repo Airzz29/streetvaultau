@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getProductBySlug, listProductsWithVariants } from "@/lib/store-db";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(
   _request: Request,
   { params }: { params: { slug: string } }
@@ -23,7 +25,7 @@ export async function GET(
     { product, relatedProducts },
     {
       headers: {
-        "Cache-Control": "public, max-age=60, s-maxage=300, stale-while-revalidate=600",
+        "Cache-Control": "private, no-store",
       },
     }
   );

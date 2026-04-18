@@ -3,6 +3,8 @@ import { listPremadeFitCards } from "@/lib/store-db";
 import { PremadeFitCardView } from "@/components/premade-fit-card";
 import { BackNavButton } from "@/components/back-nav-button";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Premade Fits | Streetwear Bundles Australia | StreetVault",
   description:

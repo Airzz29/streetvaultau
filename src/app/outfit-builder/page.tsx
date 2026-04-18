@@ -2,6 +2,8 @@ import Link from "next/link";
 import { OutfitBuilderExperience } from "@/components/outfit-builder-experience";
 import { listProductsWithVariants } from "@/lib/store-db";
 
+export const dynamic = "force-dynamic";
+
 export default function OutfitBuilderPage() {
   const products = listProductsWithVariants();
   return (

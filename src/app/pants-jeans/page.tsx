@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { CategoryPageContent } from "@/components/category-page-content";
 import { listProductsForCards } from "@/lib/store-db";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Pants, Shorts and Jeans Australia | StreetVault",
   description: "Shop premium joggers, shorts, and jeans in Australia from StreetVault.",

@@ -9,6 +9,9 @@ import { listApprovedReviews } from "@/lib/store-db";
 import { ReviewCard } from "@/components/review-card";
 import { PremadeFitCardView } from "@/components/premade-fit-card";
 
+/** SQLite-backed catalog must render per-request (build-time DB ≠ production disk on Render). */
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Streetwear Australia | Premium Fits | StreetVault",
   description:
@@ -27,8 +30,11 @@ export const metadata: Metadata = {
 export default function Home() {
   const products = listProductsForCards();
   const richProducts = listProductsWithVariants();
-  /** Same source as admin catalog: newest active products with variants (`listProductsForCards` orders by `created_at`). */
-  const topSellers = products.slice(0, 6);
+  const bestSellerPool = products.filter((item) => item.tags.includes("best_seller"));
+  const fallbackPool = products.filter(
+    (item) => !bestSellerPool.some((bestSeller) => bestSeller.id === item.id)
+  );
+  const topSellers = [...bestSellerPool, ...fallbackPool].slice(0, 6);
   const featuredFits = listPremadeFitCards().slice(0, 3);
   const latestReviews = listApprovedReviews(5);
 

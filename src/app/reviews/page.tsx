@@ -4,6 +4,8 @@ import Link from "next/link";
 import { ReviewsFilterControls } from "@/components/reviews-filter-controls";
 import { BackNavButton } from "@/components/back-nav-button";
 
+export const dynamic = "force-dynamic";
+
 type ReviewsPageProps = {
   searchParams: {
     rating?: string;

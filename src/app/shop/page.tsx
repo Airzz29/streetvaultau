@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { listProductsForCards } from "@/lib/store-db";
 import { ShopClient } from "@/components/shop-client";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Shop Streetwear Australia | StreetVault",
   description:

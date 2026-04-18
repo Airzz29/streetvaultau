@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { listProductsForCardsFiltered } from "@/lib/store-db";
 
+/** Catalog JSON must reflect live SQLite (avoid CDN/cache serving build-time demo data). */
+export const dynamic = "force-dynamic";
+
 export async function GET(request: NextRequest) {
   const search = request.nextUrl.searchParams;
   const query = search.get("q")?.toLowerCase().trim() ?? "";
@@ -18,7 +21,7 @@ export async function GET(request: NextRequest) {
     { products },
     {
       headers: {
-        "Cache-Control": "public, max-age=60, s-maxage=300, stale-while-revalidate=600",
+        "Cache-Control": "private, no-store",
       },
     }
   );

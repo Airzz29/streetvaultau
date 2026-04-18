@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { getPremadeFitBySlug, listPremadeFitCards } from "@/lib/store-db";
 import { PremadeFitDetailExperience } from "@/components/premade-fit-detail-experience";
 
+export const dynamic = "force-dynamic";
+
 type PremadeFitDetailPageProps = {
   params: { slug: string };
 };
