@@ -2,13 +2,13 @@ import path from "node:path";
 import { promises as fs } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdminPermission } from "@/lib/auth";
 import { getUploadDirectory } from "@/lib/uploads-path";
 
 const allowedTypes = new Set(["image/png", "image/webp", "image/jpeg", "image/jpg"]);
 
 export async function POST(request: NextRequest) {
-  const admin = await requireAdmin();
+  const admin = await requireAdminPermission("products");
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
     const formData = await request.formData();

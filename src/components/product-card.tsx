@@ -13,8 +13,17 @@ type ProductCardProps = {
 
 export function ProductCard({ product }: ProductCardProps) {
   const { formatPrice } = useCurrency();
-  const lowStock = product.lowestStock > 0 && product.lowestStock <= 3;
-  const outOfStock = product.totalStock <= 0;
+  const fulfillmentType = product.fulfillmentType ?? "physical";
+  const allowFb = Boolean(product.allowDropshipFallback);
+  const globallyAvailable =
+    fulfillmentType === "dropship" || product.totalStock > 0 || allowFb;
+  const globalOnly =
+    product.totalStock <= 0 &&
+    fulfillmentType === "physical" &&
+    allowFb;
+  const lowStock =
+    product.totalStock > 0 && product.lowestStock > 0 && product.lowestStock <= 3;
+  const outOfStock = !globallyAvailable;
   const [mobilePreviewOpen, setMobilePreviewOpen] = useState(false);
   const colorScrollerRef = useRef<HTMLDivElement | null>(null);
   const sizeScrollerRef = useRef<HTMLDivElement | null>(null);
@@ -45,10 +54,15 @@ export function ProductCard({ product }: ProductCardProps) {
             </span>
             {outOfStock ? (
               <span className="rounded-full border border-red-500/40 bg-red-950/80 px-2 py-1 text-red-200">
-                Out of Stock
+                Sold Out
               </span>
             ) : null}
-            {!outOfStock && lowStock ? (
+            {!outOfStock && globalOnly ? (
+              <span className="rounded-full border border-sky-500/35 bg-sky-950/70 px-2 py-1 text-sky-100">
+                Global fulfillment
+              </span>
+            ) : null}
+            {!outOfStock && !globalOnly && lowStock ? (
               <span className="rounded-full border border-amber-500/40 bg-amber-950/80 px-2 py-1 text-amber-200">
                 Low Stock
               </span>

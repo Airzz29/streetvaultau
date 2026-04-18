@@ -13,6 +13,7 @@ import {
   ProductWithVariants,
 } from "@/types/product";
 import {
+  isAustraliaShipping,
   lineFulfillmentChannel,
   orderFulfillmentChannelFromLines,
   unitPriceAudWithSurcharge,
@@ -22,6 +23,10 @@ import {
 import { trackingProviderForChannel, type TrackingProvider } from "@/lib/tracking-links";
 import { Order, OrderStatus } from "@/types/order";
 import { PremadeFit, PremadeFitCard, PremadeFitItemSlot, PremadeFitSelectionMode } from "@/types/premade-fit";
+import {
+  parseAdminPermissionsJson,
+  type AdminPermissionsMap,
+} from "@/lib/admin-permissions";
 
 type DbProductRow = {
   id: string;
@@ -49,6 +54,7 @@ type DbProductRow = {
   tags_json: string;
   fulfillment_type?: string | null;
   global_surcharge_aud?: number | null;
+  allow_dropship_fallback?: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -77,6 +83,7 @@ type DbPremadeFitRow = {
   gallery_images_json: string;
   active: number;
   featured: number;
+  bundle_price_aud: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -105,6 +112,7 @@ type DbUserRow = {
   marketing_opt_in: number;
   phone: string | null;
   last_active_at: string | null;
+  admin_permissions_json: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -475,6 +483,13 @@ function init() {
     "global_surcharge_aud"
   );
   addColumnIfMissing(
+    "products",
+    "allow_dropship_fallback INTEGER NOT NULL DEFAULT 0",
+    "allow_dropship_fallback"
+  );
+  addColumnIfMissing("premade_fits", "bundle_price_aud REAL", "bundle_price_aud");
+  addColumnIfMissing("users", "admin_permissions_json TEXT", "admin_permissions_json");
+  addColumnIfMissing(
     "orders",
     "fulfillment_channel TEXT NOT NULL DEFAULT 'local'",
     "fulfillment_channel"
@@ -664,6 +679,7 @@ function mapProduct(row: DbProductRow): Omit<ProductWithVariants, "variants"> {
     fulfillmentType:
       row.fulfillment_type === "dropship" ? "dropship" : ("physical" as FulfillmentType),
     globalSurchargeAud: Number(row.global_surcharge_aud ?? 0),
+    allowDropshipFallback: Boolean(row.allow_dropship_fallback),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -701,7 +717,7 @@ export function listProductsForCards(): ProductCardData[] {
   const rows = db
     .prepare(
       `SELECT p.id,p.slug,p.name,p.product_type,p.category,p.compare_at_price,p.tags_json,p.images_json,p.main_image,p.builder_image,
-              p.brand,
+              p.brand,p.fulfillment_type,p.allow_dropship_fallback,
               MIN(v.price) as base_price, MIN(v.stock) as lowest_stock, SUM(v.stock) as total_stock
        FROM products p JOIN variants v ON p.id=v.product_id
        WHERE p.active=1
@@ -723,12 +739,24 @@ export function listProductsForCards(): ProductCardData[] {
     base_price: number;
     lowest_stock: number;
     total_stock: number;
+    fulfillment_type: string | null;
+    allow_dropship_fallback: number | null;
   }>;
 
   const sizesByProductId = new Map<string, string[]>();
   const colorsByProductId = new Map<string, string[]>();
   const sizeRows = db
-    .prepare("SELECT product_id, size FROM variants WHERE stock > 0 ORDER BY size ASC")
+    .prepare(
+      `SELECT v.product_id, v.size
+       FROM variants v
+       JOIN products p ON p.id = v.product_id
+       WHERE p.active = 1 AND (
+         v.stock > 0
+         OR IFNULL(p.fulfillment_type,'physical') = 'dropship'
+         OR (IFNULL(p.fulfillment_type,'physical') = 'physical' AND IFNULL(p.allow_dropship_fallback,0) = 1)
+       )
+       ORDER BY v.size ASC`
+    )
     .all() as Array<{ product_id: string; size: string }>;
   for (const row of sizeRows) {
     const existing = sizesByProductId.get(row.product_id);
@@ -739,7 +767,17 @@ export function listProductsForCards(): ProductCardData[] {
     }
   }
   const colorRows = db
-    .prepare("SELECT product_id, color FROM variants WHERE stock > 0 ORDER BY color ASC")
+    .prepare(
+      `SELECT v.product_id, v.color
+       FROM variants v
+       JOIN products p ON p.id = v.product_id
+       WHERE p.active = 1 AND (
+         v.stock > 0
+         OR IFNULL(p.fulfillment_type,'physical') = 'dropship'
+         OR (IFNULL(p.fulfillment_type,'physical') = 'physical' AND IFNULL(p.allow_dropship_fallback,0) = 1)
+       )
+       ORDER BY v.color ASC`
+    )
     .all() as Array<{ product_id: string; color: string }>;
   for (const row of colorRows) {
     const existing = colorsByProductId.get(row.product_id);
@@ -766,6 +804,9 @@ export function listProductsForCards(): ProductCardData[] {
     availableSizes: sizesByProductId.get(row.id) ?? [],
     availableColors: colorsByProductId.get(row.id) ?? [],
     tags: JSON.parse(row.tags_json) as ProductTag[],
+    fulfillmentType:
+      row.fulfillment_type === "dropship" ? ("dropship" as const) : ("physical" as const),
+    allowDropshipFallback: Boolean(row.allow_dropship_fallback),
   }));
 }
 
@@ -793,7 +834,16 @@ export function listProductsForCardsFiltered(input: {
   const normalizedSize = input.size?.trim().toLowerCase();
   if (normalizedSize && normalizedSize !== "all") {
     conditions.push(
-      "EXISTS (SELECT 1 FROM variants vs WHERE vs.product_id = p.id AND LOWER(vs.size) = ? AND vs.stock > 0)"
+      `EXISTS (
+        SELECT 1 FROM variants vs
+        JOIN products pp ON pp.id = vs.product_id
+        WHERE vs.product_id = p.id AND LOWER(vs.size) = ?
+        AND (
+          vs.stock > 0
+          OR IFNULL(pp.fulfillment_type,'physical') = 'dropship'
+          OR (IFNULL(pp.fulfillment_type,'physical') = 'physical' AND IFNULL(pp.allow_dropship_fallback,0) = 1)
+        )
+      )`
     );
     params.push(normalizedSize);
   }
@@ -810,7 +860,7 @@ export function listProductsForCardsFiltered(input: {
   const rows = db
     .prepare(
       `SELECT p.id,p.slug,p.name,p.product_type,p.category,p.compare_at_price,p.tags_json,p.images_json,p.main_image,p.builder_image,
-              p.brand,
+              p.brand,p.fulfillment_type,p.allow_dropship_fallback,
               MIN(v.price) as base_price, MIN(v.stock) as lowest_stock, SUM(v.stock) as total_stock
        FROM products p
        JOIN variants v ON p.id=v.product_id
@@ -833,6 +883,8 @@ export function listProductsForCardsFiltered(input: {
     base_price: number;
     lowest_stock: number;
     total_stock: number;
+    fulfillment_type: string | null;
+    allow_dropship_fallback: number | null;
   }>;
 
   if (rows.length === 0) return [];
@@ -840,10 +892,16 @@ export function listProductsForCardsFiltered(input: {
   const placeholders = productIds.map(() => "?").join(",");
   const sizeRows = db
     .prepare(
-      `SELECT product_id, size
-       FROM variants
-       WHERE stock > 0 AND product_id IN (${placeholders})
-       ORDER BY size ASC`
+      `SELECT v.product_id, v.size
+       FROM variants v
+       JOIN products p ON p.id = v.product_id
+       WHERE v.product_id IN (${placeholders})
+       AND (
+         v.stock > 0
+         OR IFNULL(p.fulfillment_type,'physical') = 'dropship'
+         OR (IFNULL(p.fulfillment_type,'physical') = 'physical' AND IFNULL(p.allow_dropship_fallback,0) = 1)
+       )
+       ORDER BY v.size ASC`
     )
     .all(...productIds) as Array<{ product_id: string; size: string }>;
   const sizesByProductId = new Map<string, string[]>();
@@ -858,10 +916,16 @@ export function listProductsForCardsFiltered(input: {
   }
   const colorRows = db
     .prepare(
-      `SELECT product_id, color
-       FROM variants
-       WHERE stock > 0 AND product_id IN (${placeholders})
-       ORDER BY color ASC`
+      `SELECT v.product_id, v.color
+       FROM variants v
+       JOIN products p ON p.id = v.product_id
+       WHERE v.product_id IN (${placeholders})
+       AND (
+         v.stock > 0
+         OR IFNULL(p.fulfillment_type,'physical') = 'dropship'
+         OR (IFNULL(p.fulfillment_type,'physical') = 'physical' AND IFNULL(p.allow_dropship_fallback,0) = 1)
+       )
+       ORDER BY v.color ASC`
     )
     .all(...productIds) as Array<{ product_id: string; color: string }>;
   for (const row of colorRows) {
@@ -889,6 +953,9 @@ export function listProductsForCardsFiltered(input: {
     availableSizes: sizesByProductId.get(row.id) ?? [],
     availableColors: colorsByProductId.get(row.id) ?? [],
     tags: JSON.parse(row.tags_json) as ProductTag[],
+    fulfillmentType:
+      row.fulfillment_type === "dropship" ? ("dropship" as const) : ("physical" as const),
+    allowDropshipFallback: Boolean(row.allow_dropship_fallback),
   }));
 }
 
@@ -929,6 +996,10 @@ function mapPremadeFitRow(row: DbPremadeFitRow) {
     description: row.description,
     coverImage: row.cover_image,
     galleryImages: JSON.parse(row.gallery_images_json) as string[],
+    bundlePriceAUD:
+      row.bundle_price_aud != null && Number.isFinite(row.bundle_price_aud)
+        ? Number(row.bundle_price_aud)
+        : null,
     active: Boolean(row.active),
     featured: Boolean(row.featured),
     createdAt: row.created_at,
@@ -1005,6 +1076,8 @@ export function listPremadeFits(options?: { includeInactive?: boolean }): Premad
       productImages: product.images,
       productColorImageGroups: product.colorImageGroups ?? [],
       shippingRateAUD: product.shippingRateAUD,
+      productFulfillmentType: product.fulfillmentType,
+      productAllowDropshipFallback: product.allowDropshipFallback,
       selectionMode: fitItem.selection_mode,
       allowedColors,
       allowedSizes,
@@ -1030,7 +1103,7 @@ export function getPremadeFitBySlug(slug: string, options?: { includeInactive?: 
 export function listPremadeFitCards(): PremadeFitCard[] {
   return listPremadeFits()
     .map((fit) => {
-      const minPriceAUD = fit.items.reduce((sum, item) => {
+      const retailSumAUD = fit.items.reduce((sum, item) => {
         const minItem = item.variants.length
           ? Math.min(...item.variants.map((variant) => variant.price))
           : 0;
@@ -1041,6 +1114,9 @@ export function listPremadeFitCards(): PremadeFitCard[] {
         const maxItem = hasVariant ? Math.max(...item.variants.map((variant) => variant.price)) : 0;
         return sum + maxItem;
       }, 0);
+      const bundlePriceAUD =
+        fit.bundlePriceAUD != null && fit.bundlePriceAUD > 0 ? fit.bundlePriceAUD : retailSumAUD;
+      const savingsAUD = Math.max(0, retailSumAUD - bundlePriceAUD);
       const totalStock = fit.items.reduce((sum, item) => {
         const itemStock = item.selectionMode === "fixed"
           ? item.variants.find((variant) => variant.id === item.defaultVariantId)?.stock ??
@@ -1061,8 +1137,10 @@ export function listPremadeFitCards(): PremadeFitCard[] {
           fit.items[0]?.productMainImage ||
           "/favicon.ico",
         itemCount: fit.items.length,
-        minPriceAUD,
-        compareAtPriceAUD: compareAtPriceAUD > minPriceAUD ? compareAtPriceAUD : null,
+        bundlePriceAUD,
+        retailSumAUD,
+        savingsAUD,
+        compareAtPriceAUD: compareAtPriceAUD > retailSumAUD ? compareAtPriceAUD : null,
         totalStock,
       };
     })
@@ -1075,6 +1153,7 @@ export function createPremadeFit(input: {
   description: string;
   coverImage: string;
   galleryImages: string[];
+  bundlePriceAUD?: number | null;
   active: boolean;
   featured: boolean;
   items: Array<{
@@ -1093,8 +1172,8 @@ export function createPremadeFit(input: {
   const fitId = crypto.randomUUID();
   db.transaction(() => {
     db.prepare(
-      `INSERT INTO premade_fits (id, slug, name, description, cover_image, gallery_images_json, active, featured, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO premade_fits (id, slug, name, description, cover_image, gallery_images_json, bundle_price_aud, active, featured, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       fitId,
       input.slug.trim(),
@@ -1102,6 +1181,7 @@ export function createPremadeFit(input: {
       input.description.trim(),
       input.coverImage.trim(),
       JSON.stringify(input.galleryImages.filter(Boolean)),
+      input.bundlePriceAUD != null && input.bundlePriceAUD > 0 ? input.bundlePriceAUD : null,
       input.active ? 1 : 0,
       input.featured ? 1 : 0,
       now,
@@ -1140,6 +1220,7 @@ export function updatePremadeFit(
     description: string;
     coverImage: string;
     galleryImages: string[];
+    bundlePriceAUD?: number | null;
     active: boolean;
     featured: boolean;
     items: Array<{
@@ -1159,7 +1240,7 @@ export function updatePremadeFit(
   db.transaction(() => {
     db.prepare(
       `UPDATE premade_fits
-       SET slug=?, name=?, description=?, cover_image=?, gallery_images_json=?, active=?, featured=?, updated_at=?
+       SET slug=?, name=?, description=?, cover_image=?, gallery_images_json=?, bundle_price_aud=?, active=?, featured=?, updated_at=?
        WHERE id=?`
     ).run(
       input.slug.trim(),
@@ -1167,6 +1248,7 @@ export function updatePremadeFit(
       input.description.trim(),
       input.coverImage.trim(),
       JSON.stringify(input.galleryImages.filter(Boolean)),
+      input.bundlePriceAUD != null && input.bundlePriceAUD > 0 ? input.bundlePriceAUD : null,
       input.active ? 1 : 0,
       input.featured ? 1 : 0,
       now,
@@ -1268,6 +1350,7 @@ type ProductInput = {
   tags: string[];
   fulfillmentType?: FulfillmentType;
   globalSurchargeAud?: number;
+  allowDropshipFallback?: boolean;
   variants: Array<{
     id?: string;
     size: string;
@@ -1337,8 +1420,8 @@ export function createProduct(input: ProductInput) {
       `INSERT INTO products (
         id,slug,name,brand,collection_name,product_type,color_images_json,default_variant_key,category,description,compare_at_price,cost_price,shipping_rate_aud,
         images_json,main_image,builder_image,barcode,active,featured,best_seller,new_arrival,
-        outfit_slot,tags_json,fulfillment_type,global_surcharge_aud,created_at,updated_at
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+        outfit_slot,tags_json,fulfillment_type,global_surcharge_aud,allow_dropship_fallback,created_at,updated_at
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
     ).run(
       id,
       input.slug,
@@ -1365,6 +1448,7 @@ export function createProduct(input: ProductInput) {
       JSON.stringify(input.tags),
       input.fulfillmentType === "dropship" ? "dropship" : "physical",
       Math.max(0, Number(input.globalSurchargeAud ?? 0)),
+      input.fulfillmentType === "physical" && input.allowDropshipFallback ? 1 : 0,
       createdAt,
       createdAt
     );
@@ -1410,7 +1494,7 @@ export function updateProduct(input: ProductInput & { id: string }) {
       `UPDATE products SET
         slug=?,name=?,brand=?,collection_name=?,product_type=?,color_images_json=?,default_variant_key=?,category=?,description=?,compare_at_price=?,cost_price=?,shipping_rate_aud=?,
         images_json=?,main_image=?,builder_image=?,barcode=?,active=?,featured=?,best_seller=?,new_arrival=?,
-        outfit_slot=?,tags_json=?,fulfillment_type=?,global_surcharge_aud=?,updated_at=?
+        outfit_slot=?,tags_json=?,fulfillment_type=?,global_surcharge_aud=?,allow_dropship_fallback=?,updated_at=?
        WHERE id=?`
     ).run(
       input.slug,
@@ -1437,6 +1521,7 @@ export function updateProduct(input: ProductInput & { id: string }) {
       JSON.stringify(input.tags),
       input.fulfillmentType === "dropship" ? "dropship" : "physical",
       Math.max(0, Number(input.globalSurchargeAud ?? 0)),
+      input.fulfillmentType === "physical" && input.allowDropshipFallback ? 1 : 0,
       now,
       input.id
     );
@@ -1543,14 +1628,27 @@ export function validateCartStock(items: CartItem[]) {
   return { ok: true as const };
 }
 
-/** Stock is enforced only for lines that ship from local inventory (Australia + physical). */
+/** Stock is enforced only for lines that ship from local inventory (Australia + physical + enough stock). */
 export function validateCartStockForCheckout(items: CartItem[], shippingCountry: string) {
   for (const item of items) {
     const product = getProductById(item.productId);
     const variant = getVariantById(item.variantId);
     if (!variant) return { ok: false as const, message: `${item.name} variant no longer exists.` };
     if (!product) return { ok: false as const, message: `Product missing for ${item.name}.` };
-    const channel = lineFulfillmentChannel(product.fulfillmentType, shippingCountry);
+    const opts = {
+      variantStock: variant.stock,
+      allowDropshipFallback: product.allowDropshipFallback,
+      requestedQty: item.quantity,
+    };
+    if (product.fulfillmentType === "physical" && isAustraliaShipping(shippingCountry)) {
+      if (variant.stock >= item.quantity) continue;
+      if (product.allowDropshipFallback) continue;
+      return {
+        ok: false as const,
+        message: `Only ${variant.stock} left for ${item.name} (${item.size}).`,
+      };
+    }
+    const channel = lineFulfillmentChannel(product.fulfillmentType, shippingCountry, opts);
     if (channel === "local" && variant.stock < item.quantity) {
       return {
         ok: false as const,
@@ -1570,13 +1668,19 @@ export function buildPricedCheckoutItems(items: CartItem[], shippingCountry: str
     if (!product || !variant) {
       throw new Error("Cart item references missing product or variant.");
     }
-    const ch = lineFulfillmentChannel(product.fulfillmentType, shippingCountry);
+    const opts = {
+      variantStock: variant.stock,
+      allowDropshipFallback: product.allowDropshipFallback,
+      requestedQty: item.quantity,
+    };
+    const ch = lineFulfillmentChannel(product.fulfillmentType, shippingCountry, opts);
     lineChannels.push(ch);
     const unit = unitPriceAudWithSurcharge(
       variant.price,
       product.fulfillmentType,
       shippingCountry,
-      product.globalSurchargeAud
+      product.globalSurchargeAud,
+      opts
     );
     return { ...item, unitPrice: unit };
   });
@@ -1994,8 +2098,14 @@ export function createPaidOrderFromStripeSession(
       );
 
       const productRow = getProductById(item.productId);
+      const variantRow = getVariantById(item.variantId);
+      const lineOpts = {
+        variantStock: variantRow?.stock ?? 0,
+        allowDropshipFallback: productRow?.allowDropshipFallback ?? false,
+        requestedQty: item.quantity,
+      };
       const lineChannel = productRow
-        ? lineFulfillmentChannel(productRow.fulfillmentType, shippingCountry)
+        ? lineFulfillmentChannel(productRow.fulfillmentType, shippingCountry, lineOpts)
         : "dropship";
       if (lineChannel === "local") {
         const before = getVariantById(item.variantId);
@@ -2194,6 +2304,7 @@ function mapUser(row: DbUserRow) {
     marketingOptIn: Boolean(row.marketing_opt_in),
     phone: row.phone,
     lastActiveAt: row.last_active_at,
+    adminPermissions: parseAdminPermissionsJson(row.admin_permissions_json),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -2370,17 +2481,39 @@ export function countAdminUsers() {
   return row.count;
 }
 
-export function promoteUserToAdminByEmail(email: string) {
+export function promoteUserToAdminByEmail(email: string, permissions: AdminPermissionsMap | null = null) {
   const normalizedEmail = email.trim().toLowerCase();
   if (!normalizedEmail) return null;
   const now = nowISO();
-  db.prepare("UPDATE users SET role='admin', updated_at=? WHERE LOWER(email)=?").run(now, normalizedEmail);
+  const permissionsJson = permissions === null ? null : JSON.stringify(permissions);
+  db.prepare(
+    `UPDATE users SET role='admin', admin_permissions_json=?, updated_at=? WHERE LOWER(email)=?`
+  ).run(permissionsJson, now, normalizedEmail);
   return getUserByEmail(normalizedEmail);
+}
+
+export function updateAdminPermissionsForUser(userId: string, permissions: AdminPermissionsMap | null) {
+  const now = nowISO();
+  const permissionsJson = permissions === null ? null : JSON.stringify(permissions);
+  db.prepare("UPDATE users SET admin_permissions_json=?, updated_at=? WHERE id=?").run(
+    permissionsJson,
+    now,
+    userId
+  );
+  return getUserById(userId);
 }
 
 export function setUserRole(userId: string, role: "customer" | "admin" | "supplier") {
   const now = nowISO();
-  db.prepare("UPDATE users SET role=?, updated_at=? WHERE id=?").run(role, now, userId);
+  if (role === "customer") {
+    db.prepare(`UPDATE users SET role=?, admin_permissions_json=NULL, updated_at=? WHERE id=?`).run(
+      role,
+      now,
+      userId
+    );
+  } else {
+    db.prepare(`UPDATE users SET role=?, updated_at=? WHERE id=?`).run(role, now, userId);
+  }
   return getUserById(userId);
 }
 
@@ -2517,7 +2650,7 @@ export function getSession(sessionId: string) {
     .prepare(
       `SELECT s.id,s.user_id,s.expires_at,s.last_seen_at,s.user_agent,s.ip_address,
               u.id as u_id,u.first_name,u.last_name,u.email,u.password_hash,u.role,u.marketing_opt_in,
-              u.phone,u.last_active_at,u.created_at as u_created_at,u.updated_at as u_updated_at
+              u.phone,u.last_active_at,u.admin_permissions_json,u.created_at as u_created_at,u.updated_at as u_updated_at
        FROM auth_sessions s
        JOIN users u ON u.id = s.user_id
        WHERE s.id = ?`
@@ -2539,6 +2672,7 @@ export function getSession(sessionId: string) {
         marketing_opt_in: number;
         phone: string | null;
         last_active_at: string | null;
+        admin_permissions_json: string | null;
         u_created_at: string;
         u_updated_at: string;
       }
@@ -2561,6 +2695,7 @@ export function getSession(sessionId: string) {
       marketingOptIn: Boolean(row.marketing_opt_in),
       phone: row.phone,
       lastActiveAt: row.last_active_at,
+      adminPermissions: parseAdminPermissionsJson(row.admin_permissions_json),
       createdAt: row.u_created_at,
       updatedAt: row.u_updated_at,
     },

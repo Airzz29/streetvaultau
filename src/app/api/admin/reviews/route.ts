@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdminPermission } from "@/lib/auth";
 import { deleteReview, listReviewsForAdmin, updateReviewStatus } from "@/lib/store-db";
 
 export async function GET(request: NextRequest) {
-  const admin = await requireAdmin();
+  const admin = await requireAdminPermission("reviews");
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const status = request.nextUrl.searchParams.get("status") as "pending" | "approved" | "hidden" | null;
   const reviews = listReviewsForAdmin(status ?? undefined);
@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const admin = await requireAdmin();
+  const admin = await requireAdminPermission("reviews");
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const body = (await request.json()) as { id?: string; status?: "pending" | "approved" | "hidden" };
   if (!body.id || !body.status) return NextResponse.json({ error: "Invalid payload." }, { status: 400 });
@@ -20,7 +20,7 @@ export async function PATCH(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const admin = await requireAdmin();
+  const admin = await requireAdminPermission("reviews");
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const body = (await request.json()) as { id?: string };
   if (!body.id) return NextResponse.json({ error: "Invalid payload." }, { status: 400 });

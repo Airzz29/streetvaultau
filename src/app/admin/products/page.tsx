@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import { formatPriceAUD } from "@/lib/utils";
+import { storefrontVariantAvailability } from "@/lib/fulfillment";
 import { ProductColorImageGroup, ProductWithVariants } from "@/types/product";
 
 function getVariantKey(color: string, size: string) {
@@ -21,6 +22,18 @@ const bottomsTypeOptions = ["Joggers", "Jeans", "Shorts"];
 
 function categoryLabel(value: string) {
   return categoryOptions.find((option) => option.value === value)?.label ?? value;
+}
+
+function variantAvailabilityLabel(
+  fulfillmentType: "physical" | "dropship",
+  stock: number,
+  allowDropshipFallback: boolean
+) {
+  const a = storefrontVariantAvailability(fulfillmentType, stock, allowDropshipFallback);
+  if (fulfillmentType === "dropship") return "Supplier line";
+  if (a === "in_stock") return stock > 0 ? `In local stock (${stock})` : "Out of local stock";
+  if (a === "global_network") return "Out of stock — dropship available";
+  return "Unavailable";
 }
 
 export default function AdminProductsRoute() {
@@ -48,6 +61,7 @@ export default function AdminProductsRoute() {
     tags: "",
     fulfillmentType: "physical" as "physical" | "dropship",
     globalSurchargeAud: "0",
+    allowDropshipFallback: false,
     mainImage: "",
     builderImage: "",
     images: "",
@@ -288,6 +302,7 @@ export default function AdminProductsRoute() {
         .filter(Boolean),
       fulfillmentType: form.fulfillmentType,
       globalSurchargeAud: Number(form.globalSurchargeAud || 0),
+      allowDropshipFallback: form.allowDropshipFallback,
       mainImage: form.mainImage.trim() || null,
       builderImage: form.mainImage.trim() || form.builderImage.trim() || null,
       images: normalizedImages,
@@ -335,6 +350,7 @@ export default function AdminProductsRoute() {
       tags: "",
       fulfillmentType: "physical",
       globalSurchargeAud: "0",
+      allowDropshipFallback: false,
     }));
     setVariantRows([
       {
@@ -440,6 +456,8 @@ export default function AdminProductsRoute() {
                 setForm((v) => ({
                   ...v,
                   fulfillmentType: e.target.value === "dropship" ? "dropship" : "physical",
+                  allowDropshipFallback:
+                    e.target.value === "dropship" ? false : v.allowDropshipFallback,
                 }))
               }
               className="flex-1 bg-transparent text-sm outline-none"
@@ -454,6 +472,19 @@ export default function AdminProductsRoute() {
             placeholder="Global surcharge (AUD)"
             className="min-h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm"
           />
+          <label className="flex min-h-10 items-start gap-2 rounded-lg border border-white/15 bg-black/30 px-3 py-2 text-xs text-zinc-300 sm:col-span-2">
+            <input
+              type="checkbox"
+              checked={form.allowDropshipFallback}
+              disabled={form.fulfillmentType !== "physical"}
+              onChange={(e) => setForm((v) => ({ ...v, allowDropshipFallback: e.target.checked }))}
+              className="mt-0.5"
+            />
+            <span>
+              Allow supplier fallback when local stock is 0 (dropship path). Physical inventory stays accurate;
+              customers see global fulfillment instead of sold out.
+            </span>
+          </label>
           <input value={form.barcode} onChange={(e) => setForm((v) => ({ ...v, barcode: e.target.value }))} placeholder="Barcode (optional)" className="min-h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm" />
           <input value={form.tags} onChange={(e) => setForm((v) => ({ ...v, tags: e.target.value }))} placeholder="Tags (comma separated)" className="min-h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm" />
           <p className="text-xs text-zinc-500 sm:col-span-2">
@@ -689,9 +720,18 @@ export default function AdminProductsRoute() {
               ).map(([color, variants]) => (
                 <div key={color} className="rounded border border-white/10 bg-black/30 p-2 text-xs">
                   <p className="font-semibold text-zinc-200">{color}</p>
-                  <p className="mt-1 text-zinc-400">
-                    {variants.map((variant) => `${variant.size}: ${variant.stock}`).join(" | ")}
-                  </p>
+                  <ul className="mt-1 space-y-1 text-zinc-400">
+                    {variants.map((variant) => (
+                      <li key={`${variant.size}-${variant.sku}`}>
+                        {variant.size}: {variant.stock} ·{" "}
+                        {variantAvailabilityLabel(
+                          form.fulfillmentType,
+                          variant.stock,
+                          form.allowDropshipFallback
+                        )}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               ))}
             </div>
@@ -772,7 +812,12 @@ export default function AdminProductsRoute() {
               </p>
             </div>
             <p className="mt-1 text-xs text-zinc-500">
-              Variants: {product.variants.length} · Colors: {new Set(product.variants.map((v) => v.color)).size} · In stock total: {product.variants.reduce((sum, v) => sum + v.stock, 0)} ·{" "}
+              Fulfillment: {product.fulfillmentType === "dropship" ? "Dropship catalog" : "Physical"} · Fallback:{" "}
+              {product.fulfillmentType === "physical" ? (product.allowDropshipFallback ? "Yes" : "No") : "—"} · Local units:{" "}
+              {product.variants.reduce((sum, v) => sum + v.stock, 0)}
+            </p>
+            <p className="mt-1 text-xs text-zinc-500">
+              Variants: {product.variants.length} · Colors: {new Set(product.variants.map((v) => v.color)).size} ·{" "}
               {product.variants.some((v) => v.stock > 0 && v.stock <= 3) ? "Low stock warning" : "Stock healthy"}
             </p>
             <div className="mt-3 flex gap-2">
@@ -802,6 +847,7 @@ export default function AdminProductsRoute() {
                     tags: product.tags.join(","),
                     fulfillmentType: product.fulfillmentType ?? "physical",
                     globalSurchargeAud: String(product.globalSurchargeAud ?? 0),
+                    allowDropshipFallback: Boolean(product.allowDropshipFallback),
                     mainImage: product.mainImage ?? product.images[0] ?? "",
                     builderImage: product.builderImage ?? product.mainImage ?? "",
                     images: product.images.join("\n"),

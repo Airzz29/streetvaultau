@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdminPermission } from "@/lib/auth";
 import {
   createPremadeFit,
   deletePremadeFit,
@@ -7,6 +7,7 @@ import {
   listPremadeFits,
   updatePremadeFit,
 } from "@/lib/store-db";
+import { storefrontVariantAvailability } from "@/lib/fulfillment";
 import { PremadeFitItemSlot, PremadeFitSelectionMode } from "@/types/premade-fit";
 
 type FitItemInput = {
@@ -28,6 +29,7 @@ type FitBody = {
   description?: string;
   coverImage?: string;
   galleryImages?: string[];
+  bundlePriceAUD?: number | null;
   active?: boolean;
   featured?: boolean;
   items?: FitItemInput[];
@@ -52,16 +54,24 @@ function normalizeItems(items: FitItemInput[] = []) {
 function applyLiveStockConstraints(items: ReturnType<typeof normalizeItems>) {
   return items.map((item) => {
     const product = getProductById(item.productId);
-    const inStockVariants = (product?.variants ?? []).filter((variant) => variant.stock > 0);
-    const inStockColors = Array.from(new Set(inStockVariants.map((variant) => variant.color)));
-    const inStockSizes = Array.from(new Set(inStockVariants.map((variant) => variant.size)));
+    const sellableVariants = (product?.variants ?? []).filter((variant) =>
+      product
+        ? storefrontVariantAvailability(
+            product.fulfillmentType,
+            variant.stock,
+            product.allowDropshipFallback
+          ) !== "sold_out"
+        : false
+    );
+    const sellableColors = Array.from(new Set(sellableVariants.map((variant) => variant.color)));
+    const sellableSizes = Array.from(new Set(sellableVariants.map((variant) => variant.size)));
     const allowedColors = item.allowedColors.length
-      ? item.allowedColors.filter((color) => inStockColors.includes(color))
-      : inStockColors;
+      ? item.allowedColors.filter((color) => sellableColors.includes(color))
+      : sellableColors;
     const allowedSizes = item.allowedSizes.length
-      ? item.allowedSizes.filter((size) => inStockSizes.includes(size))
-      : inStockSizes;
-    const defaultVariantStillValid = inStockVariants.some(
+      ? item.allowedSizes.filter((size) => sellableSizes.includes(size))
+      : sellableSizes;
+    const defaultVariantStillValid = sellableVariants.some(
       (variant) =>
         variant.id === item.defaultVariantId &&
         allowedColors.includes(variant.color) &&
@@ -71,7 +81,7 @@ function applyLiveStockConstraints(items: ReturnType<typeof normalizeItems>) {
       ...item,
       allowedColors,
       allowedSizes,
-      defaultVariantId: defaultVariantStillValid ? item.defaultVariantId : inStockVariants[0]?.id ?? null,
+      defaultVariantId: defaultVariantStillValid ? item.defaultVariantId : sellableVariants[0]?.id ?? null,
     };
   });
 }
@@ -118,13 +128,13 @@ function validateStructuredFit(items: ReturnType<typeof normalizeItems>) {
 }
 
 export async function GET() {
-  const admin = await requireAdmin();
+  const admin = await requireAdminPermission("premade-fits");
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   return NextResponse.json({ fits: listPremadeFits({ includeInactive: true }) });
 }
 
 export async function POST(request: NextRequest) {
-  const admin = await requireAdmin();
+  const admin = await requireAdminPermission("premade-fits");
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const body = (await request.json()) as FitBody;
   if (!body.slug || !body.name || !body.description || !body.coverImage) {
@@ -149,7 +159,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const admin = await requireAdmin();
+  const admin = await requireAdminPermission("premade-fits");
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const body = (await request.json()) as FitBody;
   if (!body.id) return NextResponse.json({ error: "Fit id is required." }, { status: 400 });
@@ -167,6 +177,7 @@ export async function PATCH(request: NextRequest) {
     description: body.description,
     coverImage: body.coverImage,
     galleryImages: body.galleryImages ?? [body.coverImage],
+    bundlePriceAUD: body.bundlePriceAUD,
     active: body.active ?? true,
     featured: body.featured ?? false,
     items,
@@ -175,7 +186,7 @@ export async function PATCH(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const admin = await requireAdmin();
+  const admin = await requireAdminPermission("premade-fits");
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const body = (await request.json()) as { id?: string };
   if (!body.id) return NextResponse.json({ error: "Fit id is required." }, { status: 400 });

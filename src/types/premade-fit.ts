@@ -1,3 +1,4 @@
+import type { FulfillmentType } from "@/lib/fulfillment";
 import { ProductColorImageGroup, ProductVariant } from "@/types/product";
 
 export type PremadeFitSelectionMode = "fixed" | "selectable";
@@ -17,6 +18,8 @@ export type PremadeFitItem = {
   productImages: string[];
   productColorImageGroups: ProductColorImageGroup[];
   shippingRateAUD: number;
+  productFulfillmentType: FulfillmentType;
+  productAllowDropshipFallback: boolean;
   selectionMode: PremadeFitSelectionMode;
   allowedColors: string[];
   allowedSizes: string[];
@@ -32,6 +35,8 @@ export type PremadeFit = {
   description: string;
   coverImage: string;
   galleryImages: string[];
+  /** Optional bundle total in AUD — when set, cheaper than summed item prices (proportional split in cart). */
+  bundlePriceAUD: number | null;
   active: boolean;
   featured: boolean;
   createdAt: string;
@@ -46,7 +51,11 @@ export type PremadeFitCard = {
   description: string;
   image: string;
   itemCount: number;
-  minPriceAUD: number;
+  /** Display price (bundle override or sum of minimums). */
+  bundlePriceAUD: number;
+  /** Sum of cheapest variant per line item (compare-at retail). */
+  retailSumAUD: number;
+  savingsAUD: number;
   compareAtPriceAUD: number | null;
   totalStock: number;
 };

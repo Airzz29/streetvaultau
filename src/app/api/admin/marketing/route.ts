@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdminPermission } from "@/lib/auth";
 import {
   listDiscountCodes,
   listMarketingSubscribers,
@@ -26,7 +26,7 @@ function toAbsoluteCampaignUrl(input: string | undefined, siteUrl: string) {
 }
 
 export async function GET() {
-  const admin = await requireAdmin();
+  const admin = await requireAdminPermission("marketing");
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const subscribers = listMarketingSubscribers();
@@ -62,7 +62,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const admin = await requireAdmin();
+  const admin = await requireAdminPermission("marketing");
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = (await request.json()) as CampaignBody;

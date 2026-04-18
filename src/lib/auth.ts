@@ -9,6 +9,10 @@ import {
   touchSession,
   updateUserLastActive,
 } from "@/lib/store-db";
+import {
+  type AdminPageKey,
+  hasAdminPermission,
+} from "@/lib/admin-permissions";
 
 const AUTH_COOKIE_NAME = "sv_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 14;
@@ -144,6 +148,37 @@ export async function requireAdmin() {
   const session = await getCurrentSession();
   if (!session || session.user.role !== "admin") return null;
   return session.user;
+}
+
+/** Admin with access to a specific admin section (null DB permissions = full access). */
+export async function requireAdminPermission(pageKey: AdminPageKey) {
+  const session = await getCurrentSession();
+  if (!session || session.user.role !== "admin") return null;
+  const user = getUserById(session.user.id);
+  if (!user) return null;
+  if (!hasAdminPermission(user.adminPermissions, pageKey)) return null;
+  return user;
+}
+
+export async function requireAdminPermissionAny(keys: AdminPageKey[]) {
+  const session = await getCurrentSession();
+  if (!session || session.user.role !== "admin") return null;
+  const user = getUserById(session.user.id);
+  if (!user) return null;
+  if (keys.some((key) => hasAdminPermission(user.adminPermissions, key))) return user;
+  return null;
+}
+
+/** Dropship portal: suppliers always allowed; admins need dropship permission or full (null perms). */
+export async function requireDropshipAccess() {
+  const session = await getCurrentSession();
+  if (!session) return null;
+  if (session.user.role === "supplier") return session.user;
+  if (session.user.role !== "admin") return null;
+  const user = getUserById(session.user.id);
+  if (!user) return null;
+  if (hasAdminPermission(user.adminPermissions, "dropship")) return user;
+  return null;
 }
 
 /** Admin or supplier (dropship staff). JWT role must match DB after promotion. */

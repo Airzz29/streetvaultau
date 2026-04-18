@@ -106,14 +106,20 @@ export default function Home() {
       </section>
 
       <section className="space-y-4 fade-slide-up">
-        <div className="flex items-end justify-between">
-          <h2 className="text-2xl font-semibold sm:text-3xl">Build Your Fit</h2>
-          <div className="flex items-center gap-2">
-            <Link href="/premade-fits" className="rounded-lg border border-emerald-300/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/20">
-              Browse Premade Fits
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-2xl font-semibold sm:text-3xl">Build Your Fit</h2>
+            <p className="mt-1 text-sm text-zinc-400">Save more when you buy full outfits — premade fits include bundle pricing.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/premade-fits"
+              className="rounded-xl border border-emerald-300/40 bg-emerald-500/15 px-4 py-2.5 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/25"
+            >
+              Shop Premade Fits
             </Link>
             <Link href="/outfit-builder" className="text-sm text-zinc-300 hover:text-zinc-100">
-              Full Builder Page
+              Full outfit builder
             </Link>
           </div>
         </div>

@@ -83,6 +83,8 @@ export default function CheckoutPage() {
   });
   const [addressSuggestions, setAddressSuggestions] = useState<AddressSuggestion[]>([]);
   const [lookupLoading, setLookupLoading] = useState(false);
+  const [lockedShippingCountry, setLockedShippingCountry] = useState<string | null>(null);
+  const [showShippingDisclaimer, setShowShippingDisclaimer] = useState(true);
 
   const loadAddresses = async () => {
     const response = await fetch("/api/account/addresses", { cache: "no-store" });
@@ -100,6 +102,14 @@ export default function CheckoutPage() {
       setAddressesLoaded(true);
     });
   }, [addressesLoaded]);
+
+  useEffect(() => {
+    if (!addressesLoaded || lockedShippingCountry !== null) return;
+    const defaultAddr = addresses.find((a) => a.isDefault) ?? addresses[0];
+    const initial = (defaultAddr?.country ?? AUSTRALIA_LABEL).trim() || AUSTRALIA_LABEL;
+    setLockedShippingCountry(initial);
+    setNewAddress((prev) => ({ ...prev, country: initial }));
+  }, [addressesLoaded, addresses, lockedShippingCountry]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -149,7 +159,10 @@ export default function CheckoutPage() {
     const response = await fetch("/api/account/addresses", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...newAddress, country: newAddress.country.trim() || AUSTRALIA_LABEL }),
+      body: JSON.stringify({
+        ...newAddress,
+        country: (lockedShippingCountry ?? newAddress.country).trim() || AUSTRALIA_LABEL,
+      }),
     });
     const data = await response.json();
     if (!response.ok) {
@@ -165,13 +178,14 @@ export default function CheckoutPage() {
   };
 
   const applyAddressSuggestion = (suggestion: AddressSuggestion) => {
+    const countryLock = lockedShippingCountry ?? AUSTRALIA_LABEL;
     setNewAddress((value) => ({
       ...value,
       addressLine1: suggestion.addressLine1 || value.addressLine1,
       city: suggestion.city || value.city,
       stateRegion: suggestion.stateRegion || value.stateRegion,
       postcode: suggestion.postcode || value.postcode,
-      country: AUSTRALIA_LABEL,
+      country: countryLock,
     }));
     setAddressSuggestions([]);
   };
@@ -188,7 +202,7 @@ export default function CheckoutPage() {
       body: JSON.stringify({
         id: editingAddress.id,
         ...editDraft,
-        country: editDraft.country.trim() || AUSTRALIA_LABEL,
+        country: (lockedShippingCountry ?? editDraft.country).trim() || AUSTRALIA_LABEL,
       }),
     });
     const data = await response.json();
@@ -205,10 +219,24 @@ export default function CheckoutPage() {
     setQuoteError("");
     setQuoteMessage("");
     setReadyForStripe(false);
+    const lock = lockedShippingCountry ?? AUSTRALIA_LABEL;
     const selectedAddress = addresses.find((address) => address.id === selectedAddressId);
     const shouldUseManualAddress = useNewAddressForOrder || !selectedAddress;
+    if (selectedAddress && selectedAddress.country.trim().toLowerCase() !== lock.trim().toLowerCase()) {
+      setQuoteError(
+        `This checkout is locked to ${lock}. Choose a matching saved address or clear selection.`
+      );
+      return;
+    }
     if (!shouldUseManualAddress && !selectedAddress?.phone?.trim()) {
       setQuoteError("Please add a mobile number to the selected delivery address.");
+      return;
+    }
+    if (
+      shouldUseManualAddress &&
+      newAddress.country.trim().toLowerCase() !== lock.trim().toLowerCase()
+    ) {
+      setQuoteError(`Shipping country is locked to ${lock} for this checkout.`);
       return;
     }
     const response = await fetch("/api/checkout/quote", {
@@ -226,7 +254,7 @@ export default function CheckoutPage() {
               city: newAddress.city,
               stateRegion: newAddress.stateRegion,
               postcode: newAddress.postcode,
-              country: newAddress.country.trim() || AUSTRALIA_LABEL,
+              country: lock,
               phone: newAddress.phone,
             }
           : undefined,
@@ -272,6 +300,24 @@ export default function CheckoutPage() {
 
   return (
     <section className="space-y-4 rounded-2xl border border-white/10 bg-black/20 p-4 backdrop-blur-xl sm:p-6">
+      {showShippingDisclaimer ? (
+        <div className="fixed inset-0 z-[110] grid place-items-center bg-black/75 p-4">
+          <div className="max-w-md rounded-2xl border border-white/15 bg-zinc-950 p-5 shadow-2xl">
+            <h2 className="text-lg font-semibold text-zinc-100">Shipping details matter</h2>
+            <p className="mt-3 text-sm leading-relaxed text-zinc-300">
+              Enter your delivery information accurately. Incorrect or incomplete addresses may delay or prevent
+              fulfillment. We are not responsible for failed delivery caused by incorrect customer-provided details.
+            </p>
+            <button
+              type="button"
+              className="mt-5 w-full rounded-xl bg-zinc-100 px-4 py-3 text-sm font-semibold text-zinc-900 hover:bg-white"
+              onClick={() => setShowShippingDisclaimer(false)}
+            >
+              I understand — continue
+            </button>
+          </div>
+        </div>
+      ) : null}
       <h1 className="text-2xl font-semibold sm:text-3xl">Secure Checkout</h1>
       <p className="text-sm text-zinc-400">
         Payment is embedded on-site via Stripe Checkout.
@@ -289,11 +335,21 @@ export default function CheckoutPage() {
                 />
                 <span>Use a saved address</span>
               </label>
-              {addresses.map((address) => (
-                <label key={address.id} className="flex items-start gap-2 rounded-xl border border-white/10 p-3 text-sm">
+              {addresses.map((address) => {
+                const mismatch =
+                  lockedShippingCountry &&
+                  address.country.trim().toLowerCase() !== lockedShippingCountry.trim().toLowerCase();
+                return (
+                <label
+                  key={address.id}
+                  className={`flex items-start gap-2 rounded-xl border border-white/10 p-3 text-sm ${
+                    mismatch ? "opacity-50" : ""
+                  }`}
+                >
                   <input
                     type="radio"
                     checked={selectedAddressId === address.id}
+                    disabled={Boolean(mismatch)}
                     onChange={() => setSelectedAddressId(address.id)}
                     className="mt-1"
                   />
@@ -324,7 +380,7 @@ export default function CheckoutPage() {
                         city: address.city,
                         stateRegion: address.stateRegion,
                         postcode: address.postcode,
-                        country: address.country || AUSTRALIA_LABEL,
+                        country: (lockedShippingCountry ?? address.country) || AUSTRALIA_LABEL,
                         phone: address.phone ?? "",
                         isDefault: address.isDefault,
                       });
@@ -334,7 +390,8 @@ export default function CheckoutPage() {
                     Edit
                   </button>
                 </label>
-              ))}
+              );
+              })}
             </div>
           ) : (
             <p className="text-sm text-zinc-400">No saved addresses yet. Add one below.</p>
@@ -381,13 +438,17 @@ export default function CheckoutPage() {
             <input value={newAddress.stateRegion} onChange={(e) => setNewAddress((v) => ({ ...v, stateRegion: e.target.value.toUpperCase() }))} placeholder="State" autoComplete="address-level1" name="stateRegion" className="min-h-12 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base" />
             <input value={newAddress.postcode} onChange={(e) => setNewAddress((v) => ({ ...v, postcode: e.target.value }))} placeholder="Postcode" autoComplete="postal-code" inputMode="numeric" name="postcode" className="min-h-12 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base" />
             <input
-              value={newAddress.country}
-              onChange={(e) => setNewAddress((v) => ({ ...v, country: e.target.value }))}
+              value={lockedShippingCountry ?? newAddress.country}
+              readOnly
+              title="Country is locked for this checkout session"
               placeholder="Country"
-              autoComplete="country-name"
+              autoComplete="off"
               name="country"
-              className="min-h-12 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base"
+              className="min-h-12 w-full cursor-not-allowed rounded-lg border border-white/15 bg-black/40 px-3 text-base text-zinc-300"
             />
+            <p className="text-[11px] text-zinc-500 sm:col-span-2">
+              Shipping country is set from your first visit to checkout and cannot be changed here.
+            </p>
           </div>
           <label className="flex items-center gap-2 text-sm text-zinc-300">
             <input
@@ -474,7 +535,7 @@ export default function CheckoutPage() {
                               city: newAddress.city,
                               stateRegion: newAddress.stateRegion,
                               postcode: newAddress.postcode,
-                              country: newAddress.country.trim() || AUSTRALIA_LABEL,
+                              country: lockedShippingCountry ?? AUSTRALIA_LABEL,
                               phone: newAddress.phone,
                             }
                           : undefined,
@@ -522,11 +583,12 @@ export default function CheckoutPage() {
               <input value={editDraft.stateRegion} onChange={(e) => setEditDraft((v) => ({ ...v, stateRegion: e.target.value.toUpperCase() }))} placeholder="State" autoComplete="address-level1" className="min-h-12 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base" />
               <input value={editDraft.postcode} onChange={(e) => setEditDraft((v) => ({ ...v, postcode: e.target.value }))} placeholder="Postcode" autoComplete="postal-code" className="min-h-12 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base" />
               <input
-                value={editDraft.country}
-                onChange={(e) => setEditDraft((v) => ({ ...v, country: e.target.value }))}
+                value={lockedShippingCountry ?? editDraft.country}
+                readOnly
+                title="Country is locked for this checkout session"
                 placeholder="Country"
-                autoComplete="country-name"
-                className="min-h-12 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base"
+                autoComplete="off"
+                className="min-h-12 w-full cursor-not-allowed rounded-lg border border-white/15 bg-black/40 px-3 text-base text-zinc-300"
               />
             </div>
             <button onClick={saveEditedAddress} className="mt-3 min-h-11 w-full rounded-xl bg-zinc-100 px-4 py-2 text-sm font-semibold text-zinc-900 sm:w-auto">

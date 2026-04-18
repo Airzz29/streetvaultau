@@ -3,18 +3,34 @@
 export type FulfillmentType = "physical" | "dropship";
 export type FulfillmentChannel = "local" | "dropship";
 
+export type LineFulfillmentOpts = {
+  variantStock: number;
+  allowDropshipFallback: boolean;
+  requestedQty: number;
+};
+
 /** True if country string represents Australia (English label or ISO). */
 export function isAustraliaShipping(country: string | null | undefined): boolean {
   const n = (country ?? "").trim().toLowerCase();
   return n === "australia" || n === "au";
 }
 
+/**
+ * Effective fulfillment channel for a cart line (pricing + routing).
+ * Physical + Australia: local only when enough stock for the requested quantity;
+ * otherwise dropship if fallback is enabled.
+ */
 export function lineFulfillmentChannel(
   fulfillmentType: FulfillmentType,
-  shippingCountry: string
+  shippingCountry: string,
+  opts: LineFulfillmentOpts
 ): FulfillmentChannel {
   if (fulfillmentType === "dropship") return "dropship";
-  return isAustraliaShipping(shippingCountry) ? "local" : "dropship";
+  if (!isAustraliaShipping(shippingCountry)) return "dropship";
+  const { variantStock, allowDropshipFallback, requestedQty } = opts;
+  if (variantStock >= requestedQty) return "local";
+  if (allowDropshipFallback) return "dropship";
+  return "local";
 }
 
 /** Order-level channel: dropship if any line is routed to dropship. */
@@ -24,18 +40,34 @@ export function orderFulfillmentChannelFromLines(channels: FulfillmentChannel[])
 
 export function shouldApplyGlobalSurcharge(
   fulfillmentType: FulfillmentType,
-  shippingCountry: string
+  shippingCountry: string,
+  opts: LineFulfillmentOpts
 ): boolean {
-  return lineFulfillmentChannel(fulfillmentType, shippingCountry) === "dropship";
+  return lineFulfillmentChannel(fulfillmentType, shippingCountry, opts) === "dropship";
 }
 
 export function unitPriceAudWithSurcharge(
   baseVariantPriceAud: number,
   fulfillmentType: FulfillmentType,
   shippingCountry: string,
-  globalSurchargeAud: number
+  globalSurchargeAud: number,
+  opts: LineFulfillmentOpts
 ): number {
-  return shouldApplyGlobalSurcharge(fulfillmentType, shippingCountry)
+  return shouldApplyGlobalSurcharge(fulfillmentType, shippingCountry, opts)
     ? baseVariantPriceAud + globalSurchargeAud
     : baseVariantPriceAud;
+}
+
+/** Storefront availability (no shipping country — catalog / PDP). */
+export type StorefrontAvailability = "in_stock" | "global_network" | "sold_out";
+
+export function storefrontVariantAvailability(
+  fulfillmentType: FulfillmentType,
+  variantStock: number,
+  allowDropshipFallback: boolean
+): StorefrontAvailability {
+  if (fulfillmentType === "dropship") return "in_stock";
+  if (variantStock > 0) return "in_stock";
+  if (allowDropshipFallback) return "global_network";
+  return "sold_out";
 }

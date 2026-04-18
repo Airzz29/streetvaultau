@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdminPermission } from "@/lib/auth";
 import { countAdminUsers, getUserById, listUsersWithStats, setUserRole } from "@/lib/store-db";
 
 export async function GET(request: NextRequest) {
-  const admin = await requireAdmin();
+  const admin = await requireAdminPermission("users");
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const search = request.nextUrl.searchParams.get("q") ?? "";
   const users = listUsersWithStats(search).map((user) => ({
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const admin = await requireAdmin();
+  const admin = await requireAdminPermission("users");
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = (await request.json()) as { userId?: string; role?: string };

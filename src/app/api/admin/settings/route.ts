@@ -6,17 +6,20 @@ import {
   getActiveAdminInviteByEmail,
   getStoreSettings,
   getUserByEmail,
+  getUserById,
   listAdminUsers,
   listPendingAdminInvites,
   promoteUserToAdminByEmail,
   setUserRole,
+  updateAdminPermissionsForUser,
   updateStoreSettings,
 } from "@/lib/store-db";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdminPermission } from "@/lib/auth";
+import { normalizePermissionsPayload, type AdminPermissionsMap } from "@/lib/admin-permissions";
 import { sendAdminInviteEmail } from "@/lib/email";
 
 export async function GET() {
-  const admin = await requireAdmin();
+  const admin = await requireAdminPermission("settings");
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   return NextResponse.json({
     currentAdminId: admin.id,
@@ -27,18 +30,36 @@ export async function GET() {
       firstName: user.firstName,
       lastName: user.lastName,
       createdAt: user.createdAt,
+      adminPermissions: user.adminPermissions,
     })),
     pendingAdminInvites: listPendingAdminInvites(),
   });
 }
 
 export async function PATCH(request: NextRequest) {
-  const admin = await requireAdmin();
+  const admin = await requireAdminPermission("settings");
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const body = (await request.json()) as {
-    lowStockThreshold: number;
-    shippingFlatRate: number;
+    lowStockThreshold?: number;
+    shippingFlatRate?: number;
+    targetUserId?: string;
+    adminPermissions?: AdminPermissionsMap | null;
   };
+  if (body.targetUserId?.trim()) {
+    if (body.targetUserId === admin.id) {
+      return NextResponse.json({ error: "You cannot change your own permissions." }, { status: 400 });
+    }
+    const target = getUserById(body.targetUserId.trim());
+    if (!target || target.role !== "admin") {
+      return NextResponse.json({ error: "Target admin not found." }, { status: 404 });
+    }
+    if (!("adminPermissions" in body)) {
+      return NextResponse.json({ error: "Missing adminPermissions." }, { status: 400 });
+    }
+    const normalized = normalizePermissionsPayload(body.adminPermissions ?? null);
+    updateAdminPermissionsForUser(target.id, normalized);
+    return NextResponse.json({ ok: true });
+  }
   const settings = updateStoreSettings({
     lowStockThreshold: Math.max(1, Number(body.lowStockThreshold ?? 3)),
     shippingFlatRate: Math.max(0, Number(body.shippingFlatRate ?? 10)),
@@ -46,10 +67,10 @@ export async function PATCH(request: NextRequest) {
   return NextResponse.json(settings);
 }
 
-type PromoteAdminBody = { email?: string };
+type PromoteAdminBody = { email?: string; adminPermissions?: unknown };
 
 export async function POST(request: NextRequest) {
-  const admin = await requireAdmin();
+  const admin = await requireAdminPermission("settings");
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = (await request.json()) as PromoteAdminBody;
@@ -58,6 +79,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
   }
 
+  const permPayload = normalizePermissionsPayload(body.adminPermissions);
   const existing = getUserByEmail(email);
   if (existing) {
     if (existing.role === "admin") {
@@ -67,7 +89,7 @@ export async function POST(request: NextRequest) {
         message: "User is already an admin.",
       });
     }
-    promoteUserToAdminByEmail(email);
+    promoteUserToAdminByEmail(email, permPayload);
     return NextResponse.json({
       ok: true,
       mode: "promoted_existing_user",
@@ -115,7 +137,7 @@ export async function POST(request: NextRequest) {
 type RemoveAdminBody = { userId?: string };
 
 export async function DELETE(request: NextRequest) {
-  const admin = await requireAdmin();
+  const admin = await requireAdminPermission("settings");
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = (await request.json()) as RemoveAdminBody;

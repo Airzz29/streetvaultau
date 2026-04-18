@@ -6,13 +6,14 @@ export default function OutfitBuilderPage() {
   const products = listProductsWithVariants();
   return (
     <section className="space-y-4">
-      <div className="flex justify-end">
+      <div className="flex flex-col items-end gap-1">
         <Link
           href="/premade-fits"
-          className="rounded-xl border border-emerald-300/40 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-200 hover:bg-emerald-500/20"
+          className="rounded-xl border border-emerald-300/40 bg-emerald-500/15 px-4 py-2.5 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/25"
         >
-          View Premade Fits
+          Browse Premade Fits (save more)
         </Link>
+        <p className="text-[11px] text-zinc-500">Bundle pricing vs buying items individually.</p>
       </div>
       <OutfitBuilderExperience products={products} />
     </section>

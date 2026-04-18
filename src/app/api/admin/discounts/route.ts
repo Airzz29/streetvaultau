@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdminPermission } from "@/lib/auth";
 import { createDiscountCode, deleteDiscountCode, listDiscountCodes, updateDiscountCode } from "@/lib/store-db";
 
 export async function GET() {
-  const admin = await requireAdmin();
+  const admin = await requireAdminPermission("discounts");
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   return NextResponse.json({ discounts: listDiscountCodes() });
 }
 
 export async function POST(request: NextRequest) {
-  const admin = await requireAdmin();
+  const admin = await requireAdminPermission("discounts");
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const body = (await request.json()) as {
     code: string;
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const admin = await requireAdmin();
+  const admin = await requireAdminPermission("discounts");
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const body = (await request.json()) as {
     id: string;
@@ -56,7 +56,7 @@ export async function PATCH(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const admin = await requireAdmin();
+  const admin = await requireAdminPermission("discounts");
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const body = (await request.json()) as { id: string };
   deleteDiscountCode(body.id);

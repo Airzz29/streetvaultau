@@ -49,6 +49,8 @@ export type Product = {
   fulfillmentType: FulfillmentType;
   /** Added to variant base AUD when line routes through international/dropship pricing. */
   globalSurchargeAud: number;
+  /** Physical-only: when local variant stock is 0, allow checkout via supplier (dropship path). */
+  allowDropshipFallback: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -88,6 +90,9 @@ export type ProductCardData = {
   availableSizes: string[];
   availableColors: string[];
   tags: ProductTag[];
+  fulfillmentType?: FulfillmentType;
+  /** When true with physical + zero stock, catalogue still shows availability via supplier. */
+  allowDropshipFallback?: boolean;
 };
 
 export type CartItem = {

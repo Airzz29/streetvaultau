@@ -11,6 +11,7 @@ export async function GET() {
     user: {
       id: session.user.id,
       role: session.user.role,
+      adminPermissions: session.user.adminPermissions ?? null,
     },
   });
 }

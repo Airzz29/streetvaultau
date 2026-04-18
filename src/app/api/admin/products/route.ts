@@ -8,7 +8,7 @@ import {
   updateProduct,
   deleteProduct,
 } from "@/lib/store-db";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdminPermission } from "@/lib/auth";
 import { resolveAppBaseUrl } from "@/lib/app-url";
 import { sendMarketingCampaignEmail } from "@/lib/email";
 
@@ -31,13 +31,13 @@ function toStockSummary(variants: Array<{ size: string; color: string; stock: nu
 }
 
 export async function GET() {
-  const admin = await requireAdmin();
+  const admin = await requireAdminPermission("products");
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   return NextResponse.json({ products: listProductsWithVariants() });
 }
 
 export async function POST(request: NextRequest) {
-  const admin = await requireAdmin();
+  const admin = await requireAdminPermission("products");
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const body = await request.json();
   const variants = (body.variants ?? []) as Array<{ price?: number }>;
@@ -68,6 +68,7 @@ export async function POST(request: NextRequest) {
     tags: body.tags ?? [],
     fulfillmentType: body.fulfillmentType === "dropship" ? "dropship" : "physical",
     globalSurchargeAud: Math.max(0, Number(body.globalSurchargeAud ?? 0)),
+    allowDropshipFallback: Boolean(body.allowDropshipFallback),
     variants: body.variants ?? [],
   });
   const created = getProductBySlug(body.slug);
@@ -115,7 +116,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const admin = await requireAdmin();
+  const admin = await requireAdminPermission("products");
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const body = await request.json();
   const before = getProductById(body.id);
@@ -153,6 +154,7 @@ export async function PATCH(request: NextRequest) {
     tags: body.tags ?? [],
     fulfillmentType: body.fulfillmentType === "dropship" ? "dropship" : "physical",
     globalSurchargeAud: Math.max(0, Number(body.globalSurchargeAud ?? 0)),
+    allowDropshipFallback: Boolean(body.allowDropshipFallback),
     variants: body.variants ?? [],
   });
   const updated = getProductById(body.id);
@@ -202,7 +204,7 @@ export async function PATCH(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const admin = await requireAdmin();
+  const admin = await requireAdminPermission("products");
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const body = await request.json();
   deleteProduct(body.id);

@@ -25,10 +25,21 @@ export function PremadeFitCardView({ fit }: { fit: PremadeFitCard }) {
         <p className="text-xs uppercase tracking-[0.15em] text-zinc-500">Premade Fit</p>
         <h3 className="text-lg font-semibold text-zinc-100">{fit.name}</h3>
         <p className="line-clamp-2 text-sm text-zinc-400">{fit.description}</p>
-        <div className="flex items-center justify-between text-sm">
+        <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-emerald-400/90">
+          Bundle pricing · cheaper than buying separately
+        </p>
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
           <span className="text-zinc-300">{fit.itemCount} items</span>
-          <span className="font-semibold text-zinc-100">{formatPrice(fit.minPriceAUD)}</span>
+          <div className="text-right">
+            <span className="font-semibold text-zinc-100">{formatPrice(fit.bundlePriceAUD)}</span>
+            {fit.savingsAUD > 0 ? (
+              <span className="ml-2 text-zinc-500 line-through">{formatPrice(fit.retailSumAUD)}</span>
+            ) : null}
+          </div>
         </div>
+        {fit.savingsAUD > 0 ? (
+          <p className="text-xs text-emerald-300">Save {formatPrice(fit.savingsAUD)} with this fit</p>
+        ) : null}
       </div>
     </Link>
   );

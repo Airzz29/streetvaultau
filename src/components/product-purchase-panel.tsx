@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { storefrontVariantAvailability } from "@/lib/fulfillment";
 import { ProductWithVariants } from "@/types/product";
 import { useCart } from "@/context/cart-context";
 import { useCurrency } from "@/context/currency-context";
@@ -16,6 +17,20 @@ function getVariantKey(color: string, size: string) {
   return `${color.trim().toLowerCase()}::${size.trim().toLowerCase()}`;
 }
 
+function canSell(
+  product: ProductWithVariants,
+  v: { stock: number } | undefined
+): boolean {
+  if (!v) return false;
+  return (
+    storefrontVariantAvailability(
+      product.fulfillmentType,
+      v.stock,
+      product.allowDropshipFallback
+    ) !== "sold_out"
+  );
+}
+
 export function ProductPurchasePanel({
   product,
   selectedColor: controlledSelectedColor,
@@ -28,9 +43,10 @@ export function ProductPurchasePanel({
     product.variants.find(
       (variant) =>
         product.defaultVariantKey &&
-        getVariantKey(variant.color, variant.size) === product.defaultVariantKey
+        getVariantKey(variant.color, variant.size) === product.defaultVariantKey &&
+        canSell(product, variant)
     ) ??
-    product.variants.find((variant) => variant.stock > 0) ??
+    product.variants.find((variant) => canSell(product, variant)) ??
     product.variants[0];
   const [selectedColorInternal, setSelectedColorInternal] = useState(
     defaultVariant?.color ?? ""
@@ -38,9 +54,9 @@ export function ProductPurchasePanel({
   const selectedColor = controlledSelectedColor ?? selectedColorInternal;
   const [selectedVariantId, setSelectedVariantId] = useState(
     product.variants.find((variant) => variant.id === defaultVariant?.id)?.id ??
-      product.variants.find((variant) => variant.stock > 0 && variant.color === selectedColor)?.id ??
+      product.variants.find((variant) => canSell(product, variant) && variant.color === selectedColor)?.id ??
       product.variants.find((variant) => variant.color === selectedColor)?.id ??
-      product.variants.find((variant) => variant.stock > 0)?.id ??
+      product.variants.find((variant) => canSell(product, variant))?.id ??
       product.variants[0]?.id
   );
   const [quantity, setQuantity] = useState(1);
@@ -49,19 +65,44 @@ export function ProductPurchasePanel({
     () => product.variants.find((variant) => variant.id === selectedVariantId),
     [product.variants, selectedVariantId]
   );
-  const allSoldOut = product.variants.every((variant) => variant.stock <= 0);
+
+  const maxQtyForVariant = (v: (typeof product.variants)[number] | undefined) => {
+    if (!v) return 0;
+    if (v.stock > 0) return v.stock;
+    if (
+      storefrontVariantAvailability(
+        product.fulfillmentType,
+        v.stock,
+        product.allowDropshipFallback
+      ) === "global_network"
+    ) {
+      return 99;
+    }
+    if (product.fulfillmentType === "dropship") return 99;
+    return 0;
+  };
 
   const colorVariants = product.variants.filter((variant) => variant.color === selectedColor);
-  const hasColorInStock = colorVariants.some((variant) => variant.stock > 0);
-  const maxQty = selectedVariant?.stock ?? 0;
+  const hasColorSellable = colorVariants.some((variant) => canSell(product, variant));
+  const maxQty = maxQtyForVariant(selectedVariant);
+  const allSoldOut = product.variants.every((variant) => !canSell(product, variant));
 
-  const stockLabel = allSoldOut
-    ? "Sold Out"
-    : maxQty <= 0
+  const selAvail = selectedVariant
+    ? storefrontVariantAvailability(
+        product.fulfillmentType,
+        selectedVariant.stock,
+        product.allowDropshipFallback
+      )
+    : "sold_out";
+
+  const stockLabel =
+    selAvail === "sold_out"
       ? "Sold Out"
-      : maxQty <= 3
-        ? `Low stock: ${maxQty} left`
-        : "In stock";
+      : selAvail === "global_network"
+        ? "Available via global fulfillment"
+        : selectedVariant && selectedVariant.stock <= 3 && selectedVariant.stock > 0
+          ? `Low stock: ${selectedVariant.stock} left locally`
+          : "In stock";
 
   const colorOptions = Array.from(new Set(product.variants.map((variant) => variant.color)));
 
@@ -74,7 +115,7 @@ export function ProductPurchasePanel({
     const current = product.variants.find((variant) => variant.id === selectedVariantId);
     if (current?.color === selectedColor) return;
     const nextForColor =
-      product.variants.find((variant) => variant.color === selectedColor && variant.stock > 0) ??
+      product.variants.find((variant) => variant.color === selectedColor && canSell(product, variant)) ??
       product.variants.find((variant) => variant.color === selectedColor);
     if (nextForColor) {
       setSelectedVariantId(nextForColor.id);
@@ -93,7 +134,7 @@ export function ProductPurchasePanel({
   };
 
   const addCurrentToCart = () => {
-    if (!selectedVariant || selectedVariant.stock <= 0) return;
+    if (!selectedVariant || !canSell(product, selectedVariant)) return;
     addItem({
       productId: product.id,
       variantId: selectedVariant.id,
@@ -147,7 +188,7 @@ export function ProductPurchasePanel({
                 key={color}
                 onClick={() => {
                   const next =
-                    product.variants.find((variant) => variant.color === color && variant.stock > 0) ??
+                    product.variants.find((variant) => variant.color === color && canSell(product, variant)) ??
                     product.variants.find((variant) => variant.color === color);
                   if (next) setSelectedVariantId(next.id);
                   setSelectedColorInternal(color);
@@ -166,7 +207,7 @@ export function ProductPurchasePanel({
             );
           })}
         </div>
-        {!hasColorInStock ? <p className="text-xs text-red-300">This color is currently sold out.</p> : null}
+        {!hasColorSellable ? <p className="text-xs text-red-300">This color is currently sold out.</p> : null}
       </div>
 
       <div className="space-y-2">
@@ -176,7 +217,7 @@ export function ProductPurchasePanel({
             <button
               key={variant.id}
               onClick={() => setSelectedVariantId(variant.id)}
-              disabled={variant.stock <= 0}
+              disabled={!canSell(product, variant)}
               className={`rounded-lg border px-3 py-2 text-sm ${
                 selectedVariant?.id === variant.id
                   ? "border-zinc-100 bg-zinc-100 text-zinc-950"
@@ -208,7 +249,8 @@ export function ProductPurchasePanel({
             disabled={maxQty <= 0}
             onChange={(event) => {
               const next = Number(event.target.value || 1);
-              setQuantity(Math.min(Math.max(next, 1), Math.max(maxQty, 1)));
+              const cap = Math.max(maxQty, 1);
+              setQuantity(Math.min(Math.max(next, 1), cap));
             }}
             className="w-16 bg-transparent text-center text-base outline-none"
           />
@@ -232,18 +274,18 @@ export function ProductPurchasePanel({
 
       <div className="grid gap-2 sm:grid-cols-2">
         <button
-          disabled={!selectedVariant || selectedVariant.stock <= 0}
+          disabled={!selectedVariant || !canSell(product, selectedVariant)}
           onClick={handleAddToCart}
           className="rounded-xl border border-zinc-600 px-4 py-3 text-sm font-semibold hover:border-zinc-300 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {maxQty <= 0 || allSoldOut ? "Sold Out" : "Add to Cart"}
+          {selAvail === "sold_out" ? "Sold Out" : "Add to Cart"}
         </button>
         <button
-          disabled={!selectedVariant || selectedVariant.stock <= 0}
+          disabled={!selectedVariant || !canSell(product, selectedVariant)}
           onClick={handleBuyNow}
           className="rounded-xl bg-zinc-100 px-4 py-3 text-sm font-semibold text-zinc-950 hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {maxQty <= 0 || allSoldOut ? "Unavailable" : "Buy Now"}
+          {selAvail === "sold_out" ? "Unavailable" : "Buy Now"}
         </button>
       </div>
     </div>

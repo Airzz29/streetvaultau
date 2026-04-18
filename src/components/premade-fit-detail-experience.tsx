@@ -5,10 +5,13 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PremadeFit, PremadeFitCard } from "@/types/premade-fit";
+import type { ProductVariant } from "@/types/product";
 import { useCart } from "@/context/cart-context";
 import { useCurrency } from "@/context/currency-context";
 import { BackNavButton } from "@/components/back-nav-button";
 import { PremadeFitCardView } from "@/components/premade-fit-card";
+import { storefrontVariantAvailability } from "@/lib/fulfillment";
+import { allocateBundleUnitPricesAud } from "@/lib/premade-bundle-price";
 
 function resolveColorImages(
   product: { productMainImage: string; productImages: string[]; productColorImageGroups: PremadeFit["items"][number]["productColorImageGroups"] },
@@ -21,6 +24,20 @@ function resolveColorImages(
   const gallery = group?.galleryImages?.length ? group.galleryImages : product.productImages;
   const merged = Array.from(new Set([main, ...gallery].filter(Boolean)));
   return { mainImage: merged[0] ?? product.productMainImage, galleryImages: merged };
+}
+
+function variantSellable(
+  item: PremadeFit["items"][number],
+  v: ProductVariant | undefined
+): boolean {
+  if (!v) return false;
+  return (
+    storefrontVariantAvailability(
+      item.productFulfillmentType,
+      v.stock,
+      item.productAllowDropshipFallback
+    ) !== "sold_out"
+  );
 }
 
 export function PremadeFitDetailExperience({
@@ -38,8 +55,8 @@ export function PremadeFitDetailExperience({
     const seed: Record<string, { color: string; variantId: string }> = {};
     for (const item of fit.items) {
       const defaultVariant =
-        item.variants.find((variant) => variant.id === item.defaultVariantId) ??
-        item.variants.find((variant) => variant.stock > 0) ??
+        item.variants.find((v) => v.id === item.defaultVariantId && variantSellable(item, v)) ??
+        item.variants.find((v) => variantSellable(item, v)) ??
         item.variants[0];
       if (!defaultVariant) continue;
       seed[item.id] = { color: defaultVariant.color, variantId: defaultVariant.id };
@@ -69,14 +86,14 @@ export function PremadeFitDetailExperience({
   );
 
   const includedRows = selectedVariants.filter((row) => row.included);
-  const bundlePrice = includedRows.reduce((sum, row) => sum + (row.variant?.price ?? 0), 0);
-  const bundleCompareAt = includedRows.reduce((sum, row) => {
-    const item = row.item;
-    const maxPrice = item.variants.length ? Math.max(...item.variants.map((variant) => variant.price)) : 0;
-    return sum + maxPrice;
-  }, 0);
-  const bundleSavings = Math.max(0, bundleCompareAt - bundlePrice);
-  const soldOut = includedRows.some((row) => !row.variant || row.variant.stock <= 0);
+  const retailSum = includedRows.reduce((sum, row) => sum + (row.variant?.price ?? 0), 0);
+  const useBundlePrice =
+    fit.bundlePriceAUD != null &&
+    fit.bundlePriceAUD > 0 &&
+    includedRows.length === fit.items.length;
+  const bundleChargeTotal = useBundlePrice ? fit.bundlePriceAUD! : retailSum;
+  const bundleSavings = Math.max(0, retailSum - bundleChargeTotal);
+  const soldOut = includedRows.some((row) => !row.variant || !variantSellable(row.item, row.variant));
 
   const ensureLoggedIn = async () => {
     const response = await fetch("/api/auth/me", { cache: "no-store" });
@@ -93,24 +110,32 @@ export function PremadeFitDetailExperience({
     if (!(await ensureLoggedIn())) return;
     if (soldOut) return;
     const bundleId = `fit-${crypto.randomUUID()}`;
-    const items = includedRows
-      .filter((row): row is typeof row & { variant: NonNullable<typeof row.variant> } => Boolean(row.variant))
-      .map((row) => {
-        const colorImage = resolveColorImages(row.item, row.variant.color).mainImage;
-        return {
-          bundleId,
-          bundleName: fit.name,
-          productId: row.item.productId,
-          variantId: row.variant.id,
-          size: row.variant.size,
-          color: row.variant.color,
-          name: row.item.productName,
-          image: row.item.itemMainImage ?? colorImage,
-          unitPrice: row.variant.price,
-          shippingRateAUD: row.item.shippingRateAUD,
-          quantity: 1,
-        };
-      });
+    const rowsWithVariants = includedRows.filter(
+      (row): row is typeof row & { variant: NonNullable<typeof row.variant> } =>
+        Boolean(row.variant && variantSellable(row.item, row.variant))
+    );
+    const retailPrices = rowsWithVariants.map((row) => row.variant.price);
+    const bundleTotal =
+      fit.bundlePriceAUD != null && fit.bundlePriceAUD > 0 && rowsWithVariants.length === fit.items.length
+        ? fit.bundlePriceAUD
+        : retailPrices.reduce((a, b) => a + b, 0);
+    const allocated = allocateBundleUnitPricesAud(retailPrices, bundleTotal);
+    const items = rowsWithVariants.map((row, index) => {
+      const colorImage = resolveColorImages(row.item, row.variant.color).mainImage;
+      return {
+        bundleId,
+        bundleName: fit.name,
+        productId: row.item.productId,
+        variantId: row.variant.id,
+        size: row.variant.size,
+        color: row.variant.color,
+        name: row.item.productName,
+        image: row.item.itemMainImage ?? colorImage,
+        unitPrice: allocated[index] ?? row.variant.price,
+        shippingRateAUD: row.item.shippingRateAUD,
+        quantity: 1,
+      };
+    });
     addItems(items);
     if (goCheckout) router.push("/checkout");
   };
@@ -141,15 +166,20 @@ export function PremadeFitDetailExperience({
           <h1 className="text-3xl font-semibold">{fit.name}</h1>
           <p className="text-zinc-300">{fit.description}</p>
           <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
-            <div className="flex items-center gap-3">
-              <p className="text-2xl font-semibold">{formatPrice(bundlePrice)}</p>
-              {bundleCompareAt > bundlePrice ? (
-                <p className="text-zinc-500 line-through">{formatPrice(bundleCompareAt)}</p>
+            <p className="text-xs uppercase tracking-[0.14em] text-emerald-400/90">Buy the full outfit and save</p>
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              <p className="text-2xl font-semibold">{formatPrice(bundleChargeTotal)}</p>
+              {bundleSavings > 0 ? (
+                <p className="text-zinc-500 line-through">{formatPrice(retailSum)}</p>
               ) : null}
             </div>
             {bundleSavings > 0 ? (
-              <p className="mt-1 text-sm text-emerald-300">Bundle savings: {formatPrice(bundleSavings)}</p>
-            ) : null}
+              <p className="mt-1 text-sm text-emerald-300">
+                Save {formatPrice(bundleSavings)} vs buying items individually · bundle pricing applied
+              </p>
+            ) : (
+              <p className="mt-1 text-sm text-zinc-400">Cheaper bundled pricing when all pieces are included.</p>
+            )}
             <p className="mt-2 text-sm text-zinc-400">Includes {fit.items.length} real products.</p>
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
@@ -179,12 +209,18 @@ export function PremadeFitDetailExperience({
           {selectedVariants.map(({ item, variant, included }) => {
             const selectedColor = selection[item.id]?.color ?? variant?.color ?? "";
             const colorImages = resolveColorImages(item, selectedColor);
-            const sizeOptions = item.selectionMode === "fixed"
-              ? (variant ? [variant] : [])
-              : item.variants.filter((entry) => entry.color === selectedColor);
-            const colorOptions = item.selectionMode === "fixed"
-              ? (variant ? [variant.color] : [])
-              : Array.from(new Set(item.variants.map((entry) => entry.color)));
+            const sizeOptions =
+              item.selectionMode === "fixed"
+                ? (variant ? [variant] : [])
+                : item.variants.filter((entry) => entry.color === selectedColor);
+            const colorOptions =
+              item.selectionMode === "fixed"
+                ? (variant ? [variant.color] : [])
+                : Array.from(
+                    new Set(
+                      item.variants.filter((entry) => variantSellable(item, entry)).map((entry) => entry.color)
+                    )
+                  );
             return (
               <article key={item.id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
                 <div className="grid gap-4 md:grid-cols-[120px_1fr]">
@@ -229,8 +265,9 @@ export function PremadeFitDetailExperience({
                               type="button"
                               onClick={() => {
                                 const nextVariant =
-                                  item.variants.find((entry) => entry.color === color && entry.stock > 0) ??
-                                  item.variants.find((entry) => entry.color === color);
+                                  item.variants.find(
+                                    (entry) => entry.color === color && variantSellable(item, entry)
+                                  ) ?? item.variants.find((entry) => entry.color === color);
                                 if (!nextVariant) return;
                                 setSelection((prev) => ({
                                   ...prev,
@@ -252,7 +289,7 @@ export function PremadeFitDetailExperience({
                             <button
                               key={entry.id}
                               type="button"
-                              disabled={entry.stock <= 0}
+                              disabled={!variantSellable(item, entry)}
                               onClick={() =>
                                 setSelection((prev) => ({
                                   ...prev,

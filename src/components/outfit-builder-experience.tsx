@@ -1,10 +1,12 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Rnd } from "react-rnd";
 import { ProductWithVariants } from "@/types/product";
+import { storefrontVariantAvailability } from "@/lib/fulfillment";
 import { useCart } from "@/context/cart-context";
 import { useCurrency } from "@/context/currency-context";
 import { GlassCard } from "@/components/glass-card";
@@ -41,6 +43,13 @@ const slotLabels: Record<BuilderSlot, string> = {
   accessory: "Accessory (Optional)",
 };
 
+function isSellable(product: ProductWithVariants, variant: ProductWithVariants["variants"][number]) {
+  return (
+    storefrontVariantAvailability(product.fulfillmentType, variant.stock, product.allowDropshipFallback) !==
+    "sold_out"
+  );
+}
+
 function slotProducts(products: ProductWithVariants[], slot: BuilderSlot) {
   if (slot === "top") return products.filter((p) => ["hoodie", "tee"].includes(p.category));
   if (slot === "bottom") return products.filter((p) => p.category === "pants");
@@ -69,7 +78,12 @@ export function OutfitBuilderExperience({
   const { formatPrice } = useCurrency();
   const { addItems } = useCart();
   const canvasRef = useRef<HTMLDivElement | null>(null);
-  const availableProducts = products.filter((p) => p.variants.some((v) => v.stock > 0));
+  const availableProducts = products.filter((p) =>
+    p.variants.some(
+      (v) =>
+        storefrontVariantAvailability(p.fulfillmentType, v.stock, p.allowDropshipFallback) !== "sold_out"
+    )
+  );
   const [activeSlot, setActiveSlot] = useState<BuilderSlot | null>(null);
   const [pickerSlot, setPickerSlot] = useState<BuilderSlot | null>(null);
   const [pickerSearch, setPickerSearch] = useState("");
@@ -92,7 +106,14 @@ export function OutfitBuilderExperience({
                 product,
                 color:
                   selected.color ||
-                  product.variants.find((variant) => variant.stock > 0)?.color ||
+                  product.variants.find(
+                  (variant) =>
+                    storefrontVariantAvailability(
+                      product.fulfillmentType,
+                      variant.stock,
+                      product.allowDropshipFallback
+                    ) !== "sold_out"
+                )?.color ||
                   product.variants[0]?.color ||
                   "",
               }
@@ -108,8 +129,10 @@ export function OutfitBuilderExperience({
   const total = selectedItems.reduce(
     (sum, item) =>
       sum +
-      (item.product.variants.find((variant) => variant.stock > 0 && variant.color === item.color)?.price ??
-        item.product.variants.find((variant) => variant.stock > 0)?.price ??
+      (item.product.variants.find(
+        (variant) => isSellable(item.product, variant) && variant.color === item.color
+      )?.price ??
+        item.product.variants.find((variant) => isSellable(item.product, variant))?.price ??
         0),
     0
   );
@@ -120,8 +143,8 @@ export function OutfitBuilderExperience({
       .map((item) => {
         const variant =
           item.product.variants.find(
-            (v) => v.stock > 0 && v.color.toLowerCase() === item.color.toLowerCase()
-          ) ?? item.product.variants.find((v) => v.stock > 0);
+            (v) => isSellable(item.product, v) && v.color.toLowerCase() === item.color.toLowerCase()
+          ) ?? item.product.variants.find((v) => isSellable(item.product, v));
         if (!variant) return null;
         return {
           productId: item.product.id,
@@ -257,8 +280,17 @@ export function OutfitBuilderExperience({
           Outfit Builder
         </h2>
         <p className="text-sm text-zinc-300">
-          Build a premium fit with live pricing and in-stock only selections.
+          Build a premium fit with live pricing and real-time availability.
         </p>
+        <div className="flex flex-col gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-xs text-zinc-400 sm:flex-row sm:items-center sm:justify-between">
+          <span>Build your own or choose a premade outfit to save more.</span>
+          <Link
+            href="/premade-fits"
+            className="shrink-0 font-semibold text-emerald-300 hover:text-emerald-200"
+          >
+            Browse Premade Fits — save more
+          </Link>
+        </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
@@ -488,9 +520,7 @@ export function OutfitBuilderExperience({
             <div className="grid max-h-[60vh] gap-3 overflow-y-auto sm:grid-cols-2">
               {slotChoices.map((product) => {
                 const colors = Array.from(
-                  new Set(
-                    product.variants.filter((variant) => variant.stock > 0).map((variant) => variant.color)
-                  )
+                  new Set(product.variants.filter((variant) => isSellable(product, variant)).map((v) => v.color))
                 );
                 return (
                   <div key={product.id} className="rounded-xl border border-white/10 bg-black/20 p-3">
