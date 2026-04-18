@@ -34,3 +34,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Local SQLite (use Render disk / server only; do not commit)
+data/*.db
+
+# User uploads (admin product images, review images)
+public/uploads/

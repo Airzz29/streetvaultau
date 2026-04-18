@@ -46,6 +46,8 @@ export default function AdminProductsRoute() {
     newArrival: false,
     outfitSlot: "top",
     tags: "",
+    fulfillmentType: "physical" as "physical" | "dropship",
+    globalSurchargeAud: "0",
     mainImage: "",
     builderImage: "",
     images: "",
@@ -284,6 +286,8 @@ export default function AdminProductsRoute() {
         .split(",")
         .map((tag) => tag.trim())
         .filter(Boolean),
+      fulfillmentType: form.fulfillmentType,
+      globalSurchargeAud: Number(form.globalSurchargeAud || 0),
       mainImage: form.mainImage.trim() || null,
       builderImage: form.mainImage.trim() || form.builderImage.trim() || null,
       images: normalizedImages,
@@ -329,6 +333,8 @@ export default function AdminProductsRoute() {
       builderImage: "",
       images: "",
       tags: "",
+      fulfillmentType: "physical",
+      globalSurchargeAud: "0",
     }));
     setVariantRows([
       {
@@ -426,8 +432,33 @@ export default function AdminProductsRoute() {
           <input value={form.compareAtPrice} onChange={(e) => setForm((v) => ({ ...v, compareAtPrice: e.target.value }))} placeholder="Compare-at price (optional)" className="min-h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm" />
           <input value={form.costPrice} onChange={(e) => setForm((v) => ({ ...v, costPrice: e.target.value }))} placeholder="Cost AUD" className="min-h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm" />
           <input value={form.shippingRateAUD} onChange={(e) => setForm((v) => ({ ...v, shippingRateAUD: e.target.value }))} placeholder="Shipping AUD" className="min-h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm" />
+          <label className="flex min-h-10 items-center gap-2 rounded-lg border border-white/15 bg-black/30 px-3 text-sm sm:col-span-2">
+            <span className="text-xs text-zinc-400">Fulfillment</span>
+            <select
+              value={form.fulfillmentType}
+              onChange={(e) =>
+                setForm((v) => ({
+                  ...v,
+                  fulfillmentType: e.target.value === "dropship" ? "dropship" : "physical",
+                }))
+              }
+              className="flex-1 bg-transparent text-sm outline-none"
+            >
+              <option value="physical">Physical stock</option>
+              <option value="dropship">Dropship</option>
+            </select>
+          </label>
+          <input
+            value={form.globalSurchargeAud}
+            onChange={(e) => setForm((v) => ({ ...v, globalSurchargeAud: e.target.value }))}
+            placeholder="Global surcharge (AUD)"
+            className="min-h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm"
+          />
           <input value={form.barcode} onChange={(e) => setForm((v) => ({ ...v, barcode: e.target.value }))} placeholder="Barcode (optional)" className="min-h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm" />
           <input value={form.tags} onChange={(e) => setForm((v) => ({ ...v, tags: e.target.value }))} placeholder="Tags (comma separated)" className="min-h-10 rounded-lg border border-white/15 bg-black/30 px-3 text-sm" />
+          <p className="text-xs text-zinc-500 sm:col-span-2">
+            Global surcharge applies when a line is priced on international/dropship routing (added to variant base AUD).
+          </p>
           <textarea value={form.description} onChange={(e) => setForm((v) => ({ ...v, description: e.target.value }))} placeholder="Description" className="min-h-20 rounded-lg border border-white/15 bg-black/30 px-3 py-2 text-sm sm:col-span-2" />
           <div className="grid grid-cols-2 gap-2 text-xs sm:col-span-2">
             <label className="flex items-center gap-2"><input type="checkbox" checked={form.active} onChange={(e) => setForm((v) => ({ ...v, active: e.target.checked }))} /> Active</label>
@@ -769,6 +800,8 @@ export default function AdminProductsRoute() {
                     newArrival: product.newArrival,
                     outfitSlot: product.outfitSlot,
                     tags: product.tags.join(","),
+                    fulfillmentType: product.fulfillmentType ?? "physical",
+                    globalSurchargeAud: String(product.globalSurchargeAud ?? 0),
                     mainImage: product.mainImage ?? product.images[0] ?? "",
                     builderImage: product.builderImage ?? product.mainImage ?? "",
                     images: product.images.join("\n"),

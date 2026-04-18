@@ -12,6 +12,14 @@ import {
   ProductTag,
   ProductWithVariants,
 } from "@/types/product";
+import {
+  lineFulfillmentChannel,
+  orderFulfillmentChannelFromLines,
+  unitPriceAudWithSurcharge,
+  type FulfillmentChannel,
+  type FulfillmentType,
+} from "@/lib/fulfillment";
+import { trackingProviderForChannel, type TrackingProvider } from "@/lib/tracking-links";
 import { Order, OrderStatus } from "@/types/order";
 import { PremadeFit, PremadeFitCard, PremadeFitItemSlot, PremadeFitSelectionMode } from "@/types/premade-fit";
 
@@ -39,6 +47,8 @@ type DbProductRow = {
   new_arrival: number;
   outfit_slot: string;
   tags_json: string;
+  fulfillment_type?: string | null;
+  global_surcharge_aud?: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -91,7 +101,7 @@ type DbUserRow = {
   last_name: string;
   email: string;
   password_hash: string;
-  role: "customer" | "admin";
+  role: "customer" | "admin" | "supplier";
   marketing_opt_in: number;
   phone: string | null;
   last_active_at: string | null;
@@ -454,6 +464,22 @@ function init() {
   addColumnIfMissing("products", "featured INTEGER NOT NULL DEFAULT 0", "featured");
   addColumnIfMissing("products", "best_seller INTEGER NOT NULL DEFAULT 0", "best_seller");
   addColumnIfMissing("products", "new_arrival INTEGER NOT NULL DEFAULT 0", "new_arrival");
+  addColumnIfMissing(
+    "products",
+    "fulfillment_type TEXT NOT NULL DEFAULT 'physical'",
+    "fulfillment_type"
+  );
+  addColumnIfMissing(
+    "products",
+    "global_surcharge_aud REAL NOT NULL DEFAULT 0",
+    "global_surcharge_aud"
+  );
+  addColumnIfMissing(
+    "orders",
+    "fulfillment_channel TEXT NOT NULL DEFAULT 'local'",
+    "fulfillment_channel"
+  );
+  addColumnIfMissing("orders", "tracking_provider TEXT", "tracking_provider");
 
   addColumnIfMissing("variants", "stock_holder TEXT", "stock_holder");
   addColumnIfMissing("variants", "stock_location TEXT", "stock_location");
@@ -635,6 +661,9 @@ function mapProduct(row: DbProductRow): Omit<ProductWithVariants, "variants"> {
     barcode: row.barcode,
     outfitSlot: row.outfit_slot as ProductWithVariants["outfitSlot"],
     tags: JSON.parse(row.tags_json) as ProductTag[],
+    fulfillmentType:
+      row.fulfillment_type === "dropship" ? "dropship" : ("physical" as FulfillmentType),
+    globalSurchargeAud: Number(row.global_surcharge_aud ?? 0),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -1237,6 +1266,8 @@ type ProductInput = {
   newArrival?: boolean;
   outfitSlot: string;
   tags: string[];
+  fulfillmentType?: FulfillmentType;
+  globalSurchargeAud?: number;
   variants: Array<{
     id?: string;
     size: string;
@@ -1306,8 +1337,8 @@ export function createProduct(input: ProductInput) {
       `INSERT INTO products (
         id,slug,name,brand,collection_name,product_type,color_images_json,default_variant_key,category,description,compare_at_price,cost_price,shipping_rate_aud,
         images_json,main_image,builder_image,barcode,active,featured,best_seller,new_arrival,
-        outfit_slot,tags_json,created_at,updated_at
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+        outfit_slot,tags_json,fulfillment_type,global_surcharge_aud,created_at,updated_at
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
     ).run(
       id,
       input.slug,
@@ -1332,6 +1363,8 @@ export function createProduct(input: ProductInput) {
       input.newArrival ? 1 : 0,
       input.outfitSlot,
       JSON.stringify(input.tags),
+      input.fulfillmentType === "dropship" ? "dropship" : "physical",
+      Math.max(0, Number(input.globalSurchargeAud ?? 0)),
       createdAt,
       createdAt
     );
@@ -1377,7 +1410,7 @@ export function updateProduct(input: ProductInput & { id: string }) {
       `UPDATE products SET
         slug=?,name=?,brand=?,collection_name=?,product_type=?,color_images_json=?,default_variant_key=?,category=?,description=?,compare_at_price=?,cost_price=?,shipping_rate_aud=?,
         images_json=?,main_image=?,builder_image=?,barcode=?,active=?,featured=?,best_seller=?,new_arrival=?,
-        outfit_slot=?,tags_json=?,updated_at=?
+        outfit_slot=?,tags_json=?,fulfillment_type=?,global_surcharge_aud=?,updated_at=?
        WHERE id=?`
     ).run(
       input.slug,
@@ -1402,6 +1435,8 @@ export function updateProduct(input: ProductInput & { id: string }) {
       input.newArrival ? 1 : 0,
       input.outfitSlot,
       JSON.stringify(input.tags),
+      input.fulfillmentType === "dropship" ? "dropship" : "physical",
+      Math.max(0, Number(input.globalSurchargeAud ?? 0)),
       now,
       input.id
     );
@@ -1508,6 +1543,47 @@ export function validateCartStock(items: CartItem[]) {
   return { ok: true as const };
 }
 
+/** Stock is enforced only for lines that ship from local inventory (Australia + physical). */
+export function validateCartStockForCheckout(items: CartItem[], shippingCountry: string) {
+  for (const item of items) {
+    const product = getProductById(item.productId);
+    const variant = getVariantById(item.variantId);
+    if (!variant) return { ok: false as const, message: `${item.name} variant no longer exists.` };
+    if (!product) return { ok: false as const, message: `Product missing for ${item.name}.` };
+    const channel = lineFulfillmentChannel(product.fulfillmentType, shippingCountry);
+    if (channel === "local" && variant.stock < item.quantity) {
+      return {
+        ok: false as const,
+        message: `Only ${variant.stock} left for ${item.name} (${item.size}).`,
+      };
+    }
+  }
+  return { ok: true as const };
+}
+
+/** Recompute per-line AUD unit prices from variant base + global surcharge rules. */
+export function buildPricedCheckoutItems(items: CartItem[], shippingCountry: string) {
+  const lineChannels: FulfillmentChannel[] = [];
+  const pricedItems = items.map((item) => {
+    const product = getProductById(item.productId);
+    const variant = getVariantById(item.variantId);
+    if (!product || !variant) {
+      throw new Error("Cart item references missing product or variant.");
+    }
+    const ch = lineFulfillmentChannel(product.fulfillmentType, shippingCountry);
+    lineChannels.push(ch);
+    const unit = unitPriceAudWithSurcharge(
+      variant.price,
+      product.fulfillmentType,
+      shippingCountry,
+      product.globalSurchargeAud
+    );
+    return { ...item, unitPrice: unit };
+  });
+  const orderChannel = orderFulfillmentChannelFromLines(lineChannels);
+  return { pricedItems, orderChannel };
+}
+
 export function computeShippingForItems(items: CartItem[]) {
   if (items.length === 0) return 0;
   const uniqueProductIds = Array.from(new Set(items.map((item) => item.productId)));
@@ -1602,6 +1678,8 @@ function mapOrderRowsToOrders(
     revenue_aud: number;
     cost_total_aud: number;
     profit_aud: number;
+    fulfillment_channel?: string | null;
+    tracking_provider?: string | null;
     status: OrderStatus;
     created_at: string;
     updated_at: string;
@@ -1683,6 +1761,14 @@ function mapOrderRowsToOrders(
     revenueAUD: row.revenue_aud,
     costTotalAUD: row.cost_total_aud,
     profitAUD: row.profit_aud,
+    fulfillmentChannel:
+      row.fulfillment_channel === "dropship" ? ("dropship" as const) : ("local" as const),
+    trackingProvider: ((): TrackingProvider => {
+      if (row.tracking_provider === "global17" || row.tracking_provider === "auspost") {
+        return row.tracking_provider;
+      }
+      return trackingProviderForChannel(row.fulfillment_channel === "dropship" ? "dropship" : "local");
+    })(),
     status: row.status,
     items: itemsByOrderId.get(row.id) ?? [],
     createdAt: row.created_at,
@@ -1721,6 +1807,8 @@ function queryOrders(whereSql?: string, params: Array<string> = []) {
     revenue_aud: number;
     cost_total_aud: number;
     profit_aud: number;
+    fulfillment_channel?: string | null;
+    tracking_provider?: string | null;
     status: OrderStatus;
     created_at: string;
     updated_at: string;
@@ -1730,6 +1818,14 @@ function queryOrders(whereSql?: string, params: Array<string> = []) {
 
 export function listOrders(): Order[] {
   return queryOrders();
+}
+
+export function listLocalFulfillmentOrders(): Order[] {
+  return queryOrders("(fulfillment_channel IS NULL OR fulfillment_channel = ?)", ["local"]);
+}
+
+export function listDropshipFulfillmentOrders(): Order[] {
+  return queryOrders("fulfillment_channel = ?", ["dropship"]);
 }
 
 export function listOrdersByCustomerEmail(email: string) {
@@ -1782,17 +1878,31 @@ export function createPaidOrderFromStripeSession(
   if (!draft) return { created: false as const, reason: "missing_draft" as const };
 
   const items = JSON.parse(draft.items_json) as CartItem[];
-  const stockValidation = validateCartStock(items);
+  const shippingSnap = draft.shipping_snapshot_json
+    ? (JSON.parse(draft.shipping_snapshot_json) as { country?: string })
+    : null;
+  const shippingCountry = shippingSnap?.country?.trim() || "Australia";
+
+  const stockValidation = validateCartStockForCheckout(items, shippingCountry);
   if (!stockValidation.ok) {
     return { created: false as const, reason: "insufficient_stock" as const };
   }
 
-  const subtotalBeforeDiscount = items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+  let pricedItems: CartItem[];
+  let orderChannel: FulfillmentChannel = "local";
+  try {
+    ({ pricedItems, orderChannel } = buildPricedCheckoutItems(items, shippingCountry));
+  } catch {
+    return { created: false as const, reason: "invalid_cart" as const };
+  }
+  const trackingProv: TrackingProvider = trackingProviderForChannel(orderChannel);
+
+  const subtotalBeforeDiscount = pricedItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
   const discountAmount = Math.max(0, Math.min(draft.discount_amount_aud ?? 0, subtotalBeforeDiscount));
   const subtotal = subtotalBeforeDiscount - discountAmount;
-  const shipping = computeShippingForItems(items);
+  const shipping = computeShippingForItems(pricedItems);
   const revenue = subtotal + shipping;
-  const uniqueProductIds = Array.from(new Set(items.map((item) => item.productId)));
+  const uniqueProductIds = Array.from(new Set(pricedItems.map((item) => item.productId)));
   const productPlaceholders = uniqueProductIds.map(() => "?").join(",");
   const productCostRows = uniqueProductIds.length
     ? (db
@@ -1800,7 +1910,7 @@ export function createPaidOrderFromStripeSession(
         .all(...uniqueProductIds) as Array<{ id: string; cost_price: number }>)
     : [];
   const productCostById = new Map(productCostRows.map((row) => [row.id, row.cost_price]));
-  const costTotal = items.reduce(
+  const costTotal = pricedItems.reduce(
     (sum, item) => sum + (productCostById.get(item.productId) ?? 0) * item.quantity,
     0
   );
@@ -1827,8 +1937,9 @@ export function createPaidOrderFromStripeSession(
         shipping_first_name,shipping_last_name,shipping_address_line_1,shipping_address_line_2,shipping_city,shipping_state_region,shipping_postcode,shipping_country,shipping_phone,
         discount_code,discount_amount_aud,
         payment_status,fulfillment_status,tracking_code,carrier,
-        shipping_notes,internal_notes,subtotal_aud,shipping_aud,revenue_aud,cost_total_aud,profit_aud,status,created_at,updated_at
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+        shipping_notes,internal_notes,subtotal_aud,shipping_aud,revenue_aud,cost_total_aud,profit_aud,
+        fulfillment_channel,tracking_provider,status,created_at,updated_at
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
     ).run(
       orderId,
       stripeSessionId,
@@ -1857,12 +1968,14 @@ export function createPaidOrderFromStripeSession(
       revenue,
       costTotal,
       profit,
+      orderChannel,
+      trackingProv,
       "pending_fulfillment",
       now,
       now
     );
 
-    for (const item of items) {
+    for (const item of pricedItems) {
       db.prepare(
         `INSERT INTO order_items (id,order_id,product_id,variant_id,name,size,color,image,unit_price,unit_cost,quantity)
          VALUES (?,?,?,?,?,?,?,?,?,?,?)`
@@ -1880,22 +1993,28 @@ export function createPaidOrderFromStripeSession(
         item.quantity
       );
 
-      const before = getVariantById(item.variantId);
-      db.prepare("UPDATE variants SET stock=MAX(stock-?,0), updated_at=? WHERE id=?").run(
-        item.quantity,
-        nowISO(),
-        item.variantId
-      );
-      const after = getVariantById(item.variantId);
-      insertInventoryLog({
-        productId: item.productId,
-        variantId: item.variantId,
-        change: -(before?.stock ?? 0) + (after?.stock ?? 0),
-        reason: `order_sale:${orderId}`,
-        holder: after?.stockHolder ?? null,
-        location: after?.stockLocation ?? null,
-        note: `Deducted ${item.quantity} from paid order.`,
-      });
+      const productRow = getProductById(item.productId);
+      const lineChannel = productRow
+        ? lineFulfillmentChannel(productRow.fulfillmentType, shippingCountry)
+        : "dropship";
+      if (lineChannel === "local") {
+        const before = getVariantById(item.variantId);
+        db.prepare("UPDATE variants SET stock=MAX(stock-?,0), updated_at=? WHERE id=?").run(
+          item.quantity,
+          nowISO(),
+          item.variantId
+        );
+        const after = getVariantById(item.variantId);
+        insertInventoryLog({
+          productId: item.productId,
+          variantId: item.variantId,
+          change: -(before?.stock ?? 0) + (after?.stock ?? 0),
+          reason: `order_sale:${orderId}`,
+          holder: after?.stockHolder ?? null,
+          location: after?.stockLocation ?? null,
+          note: `Deducted ${item.quantity} from paid order.`,
+        });
+      }
     }
 
     if (draft.discount_code) {
@@ -2086,7 +2205,7 @@ export function createUser(input: {
   email: string;
   passwordHash: string;
   marketingOptIn: boolean;
-  role?: "customer" | "admin";
+  role?: "customer" | "admin" | "supplier";
 }) {
   const now = nowISO();
   const id = crypto.randomUUID();
@@ -2259,7 +2378,7 @@ export function promoteUserToAdminByEmail(email: string) {
   return getUserByEmail(normalizedEmail);
 }
 
-export function setUserRole(userId: string, role: "customer" | "admin") {
+export function setUserRole(userId: string, role: "customer" | "admin" | "supplier") {
   const now = nowISO();
   db.prepare("UPDATE users SET role=?, updated_at=? WHERE id=?").run(role, now, userId);
   return getUserById(userId);
@@ -2416,7 +2535,7 @@ export function getSession(sessionId: string) {
         last_name: string;
         email: string;
         password_hash: string;
-        role: "customer" | "admin";
+        role: "customer" | "admin" | "supplier";
         marketing_opt_in: number;
         phone: string | null;
         last_active_at: string | null;

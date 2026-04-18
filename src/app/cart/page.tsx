@@ -204,7 +204,8 @@ export default function CartPage() {
             />
           </div>
           <p className="text-xs text-zinc-500">
-            Express shipping is calculated per item. Checkout is available for Australia only.
+            Shipping is calculated per item. Checkout supports Australian and international addresses; pricing follows
+            your fulfillment route at checkout.
           </p>
         </aside>
       </div>

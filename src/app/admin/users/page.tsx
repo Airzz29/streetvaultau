@@ -35,6 +35,21 @@ export default function AdminUsersRoute() {
     [users, search]
   );
 
+  const changeRole = async (userId: string, nextRole: string) => {
+    const response = await fetch("/api/admin/users", {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, role: nextRole }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      window.alert(data.error ?? "Could not update role.");
+      return;
+    }
+    setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, role: nextRole } : u)));
+  };
+
   return (
     <section className="space-y-4">
       <h2 className="text-2xl font-semibold">Users</h2>
@@ -49,7 +64,15 @@ export default function AdminUsersRoute() {
           <article key={user.id} className="rounded-2xl border border-white/10 bg-black/25 p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-base font-semibold">{user.firstName} {user.lastName}</p>
-              <p className="text-xs text-zinc-400">{user.role}</p>
+              <select
+                value={user.role}
+                onChange={(event) => changeRole(user.id, event.target.value)}
+                className="rounded-lg border border-white/15 bg-black/40 px-2 py-1 text-xs text-zinc-200"
+              >
+                <option value="customer">customer</option>
+                <option value="admin">admin</option>
+                <option value="supplier">supplier</option>
+              </select>
             </div>
             <p className="mt-1 text-sm text-zinc-300">{user.email}</p>
             <p className="mt-1 text-xs text-zinc-400">

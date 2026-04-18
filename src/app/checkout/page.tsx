@@ -51,6 +51,7 @@ export default function CheckoutPage() {
     discountAmountAUD: number;
     totalAUD: number;
     discountCode: string | null;
+    useGlobalFulfillmentNotice?: boolean;
   } | null>(null);
   const [readyForStripe, setReadyForStripe] = useState(false);
   const [newAddress, setNewAddress] = useState({
@@ -148,7 +149,7 @@ export default function CheckoutPage() {
     const response = await fetch("/api/account/addresses", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...newAddress, country: AUSTRALIA_LABEL }),
+      body: JSON.stringify({ ...newAddress, country: newAddress.country.trim() || AUSTRALIA_LABEL }),
     });
     const data = await response.json();
     if (!response.ok) {
@@ -184,7 +185,11 @@ export default function CheckoutPage() {
     const response = await fetch("/api/account/addresses", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: editingAddress.id, ...editDraft, country: AUSTRALIA_LABEL }),
+      body: JSON.stringify({
+        id: editingAddress.id,
+        ...editDraft,
+        country: editDraft.country.trim() || AUSTRALIA_LABEL,
+      }),
     });
     const data = await response.json();
     if (!response.ok) {
@@ -221,7 +226,7 @@ export default function CheckoutPage() {
               city: newAddress.city,
               stateRegion: newAddress.stateRegion,
               postcode: newAddress.postcode,
-              country: AUSTRALIA_LABEL,
+              country: newAddress.country.trim() || AUSTRALIA_LABEL,
               phone: newAddress.phone,
             }
           : undefined,
@@ -300,6 +305,8 @@ export default function CheckoutPage() {
                     <br />
                     {address.city}, {address.stateRegion} {address.postcode}
                     <br />
+                    {address.country}
+                    <br />
                     <span className="text-xs text-zinc-400">
                       Mobile: {address.phone?.trim() ? address.phone : "Missing - add before checkout"}
                     </span>
@@ -317,7 +324,7 @@ export default function CheckoutPage() {
                         city: address.city,
                         stateRegion: address.stateRegion,
                         postcode: address.postcode,
-                        country: AUSTRALIA_LABEL,
+                        country: address.country || AUSTRALIA_LABEL,
                         phone: address.phone ?? "",
                         isDefault: address.isDefault,
                       });
@@ -343,8 +350,9 @@ export default function CheckoutPage() {
           <p className="text-xs text-zinc-400">
             You can checkout directly with the form below. Saving the address is optional.
           </p>
-          <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100">
-            Australia-only shipping. Country is fixed to {AUSTRALIA_LABEL} at checkout.
+          <div className="rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-xs text-zinc-300">
+            We ship worldwide. Australian orders may use standard local fulfillment when stock is available;
+            international and selected lines ship via our global fulfillment network.
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <input value={newAddress.firstName} onChange={(e) => setNewAddress((v) => ({ ...v, firstName: e.target.value }))} placeholder="First name" autoComplete="given-name" name="firstName" className="min-h-12 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base" />
@@ -372,7 +380,14 @@ export default function CheckoutPage() {
             <input value={newAddress.city} onChange={(e) => setNewAddress((v) => ({ ...v, city: e.target.value }))} placeholder="Suburb / City" autoComplete="address-level2" name="city" className="min-h-12 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base" />
             <input value={newAddress.stateRegion} onChange={(e) => setNewAddress((v) => ({ ...v, stateRegion: e.target.value.toUpperCase() }))} placeholder="State" autoComplete="address-level1" name="stateRegion" className="min-h-12 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base" />
             <input value={newAddress.postcode} onChange={(e) => setNewAddress((v) => ({ ...v, postcode: e.target.value }))} placeholder="Postcode" autoComplete="postal-code" inputMode="numeric" name="postcode" className="min-h-12 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base" />
-            <input value={AUSTRALIA_LABEL} readOnly aria-readonly autoComplete="country-name" className="min-h-12 w-full rounded-lg border border-emerald-400/20 bg-emerald-500/10 px-3 text-base text-emerald-50" />
+            <input
+              value={newAddress.country}
+              onChange={(e) => setNewAddress((v) => ({ ...v, country: e.target.value }))}
+              placeholder="Country"
+              autoComplete="country-name"
+              name="country"
+              className="min-h-12 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base"
+            />
           </div>
           <label className="flex items-center gap-2 text-sm text-zinc-300">
             <input
@@ -414,6 +429,12 @@ export default function CheckoutPage() {
                     Code applied: {quote.discountCode} · You saved {formatPrice(quote.discountAmountAUD)}
                   </p>
                 ) : null}
+                {quote.useGlobalFulfillmentNotice ? (
+                  <p className="rounded-lg border border-white/15 bg-black/35 px-2 py-2 text-[11px] leading-relaxed text-zinc-300">
+                    This order ships through our global fulfillment line. Carrier tracking may take up to five business
+                    days to appear—you will receive a link as soon as it is available.
+                  </p>
+                ) : null}
                 <p className="mt-2 text-[11px] leading-relaxed text-zinc-500">
                   Quote totals are stored in AUD at checkout. Converted amounts above are estimates for browsing only.
                 </p>
@@ -453,7 +474,7 @@ export default function CheckoutPage() {
                               city: newAddress.city,
                               stateRegion: newAddress.stateRegion,
                               postcode: newAddress.postcode,
-                              country: AUSTRALIA_LABEL,
+                              country: newAddress.country.trim() || AUSTRALIA_LABEL,
                               phone: newAddress.phone,
                             }
                           : undefined,
@@ -500,7 +521,13 @@ export default function CheckoutPage() {
               <input value={editDraft.city} onChange={(e) => setEditDraft((v) => ({ ...v, city: e.target.value }))} placeholder="Suburb / City" autoComplete="address-level2" className="min-h-12 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base" />
               <input value={editDraft.stateRegion} onChange={(e) => setEditDraft((v) => ({ ...v, stateRegion: e.target.value.toUpperCase() }))} placeholder="State" autoComplete="address-level1" className="min-h-12 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base" />
               <input value={editDraft.postcode} onChange={(e) => setEditDraft((v) => ({ ...v, postcode: e.target.value }))} placeholder="Postcode" autoComplete="postal-code" className="min-h-12 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base" />
-              <input value={AUSTRALIA_LABEL} readOnly aria-readonly autoComplete="country-name" className="min-h-12 w-full rounded-lg border border-emerald-400/20 bg-emerald-500/10 px-3 text-base text-emerald-50" />
+              <input
+                value={editDraft.country}
+                onChange={(e) => setEditDraft((v) => ({ ...v, country: e.target.value }))}
+                placeholder="Country"
+                autoComplete="country-name"
+                className="min-h-12 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-base"
+              />
             </div>
             <button onClick={saveEditedAddress} className="mt-3 min-h-11 w-full rounded-xl bg-zinc-100 px-4 py-2 text-sm font-semibold text-zinc-900 sm:w-auto">
               Save changes

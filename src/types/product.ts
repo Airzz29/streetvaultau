@@ -1,4 +1,8 @@
+import type { FulfillmentType } from "@/lib/fulfillment";
+
 export type OutfitSlot = "top" | "bottom" | "shoes" | "accessory";
+
+export type { FulfillmentType };
 
 export type ProductCategory =
   | "hoodie"
@@ -41,6 +45,10 @@ export type Product = {
   barcode?: string | null;
   outfitSlot: OutfitSlot;
   tags: ProductTag[];
+  /** Local warehouse vs supplier-led catalog. */
+  fulfillmentType: FulfillmentType;
+  /** Added to variant base AUD when line routes through international/dropship pricing. */
+  globalSurchargeAud: number;
   createdAt: string;
   updatedAt: string;
 };

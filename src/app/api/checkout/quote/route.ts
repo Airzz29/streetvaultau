@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { CartItem } from "@/types/product";
 import {
+  buildPricedCheckoutItems,
   computeShippingForItems,
   createUserAddress,
   getUserAddressById,
-  validateCartStock,
+  validateCartStockForCheckout,
   validateDiscountCode,
 } from "@/lib/store-db";
 
@@ -21,11 +22,6 @@ type ShippingInput = {
   phone?: string;
 };
 
-function isAustraliaOnlyCountry(value?: string | null) {
-  const normalized = (value ?? "").trim().toLowerCase();
-  return normalized === "australia" || normalized === "au";
-}
-
 export async function POST(request: NextRequest) {
   const user = await requireUser();
   if (!user) return NextResponse.json({ error: "Login required before checkout." }, { status: 401 });
@@ -38,9 +34,6 @@ export async function POST(request: NextRequest) {
   };
   if (!body.items?.length) return NextResponse.json({ error: "Cart is empty." }, { status: 400 });
   let address = body.addressId ? getUserAddressById(user.id, body.addressId) : null;
-  if (address && !isAustraliaOnlyCountry(address.country)) {
-    return NextResponse.json({ error: "Checkout currently supports Australia shipping only." }, { status: 400 });
-  }
   if (!address && body.shippingAddress) {
     const input = body.shippingAddress;
     if (
@@ -57,9 +50,7 @@ export async function POST(request: NextRequest) {
     if (!input.phone?.trim()) {
       return NextResponse.json({ error: "Mobile number is required for shipping." }, { status: 400 });
     }
-    if (!isAustraliaOnlyCountry(input.country)) {
-      return NextResponse.json({ error: "Checkout currently supports Australia shipping only." }, { status: 400 });
-    }
+    const countryLabel = input.country.trim();
     if (body.saveAddressForFuture) {
       const updatedAddresses = createUserAddress(user.id, {
         firstName: input.firstName,
@@ -69,7 +60,7 @@ export async function POST(request: NextRequest) {
         city: input.city,
         stateRegion: input.stateRegion,
         postcode: input.postcode,
-        country: "Australia",
+        country: countryLabel,
         phone: input.phone,
         isDefault: false,
       });
@@ -93,7 +84,7 @@ export async function POST(request: NextRequest) {
         city: input.city.trim(),
         stateRegion: input.stateRegion.trim(),
         postcode: input.postcode.trim(),
-        country: "Australia",
+        country: countryLabel,
         phone: input.phone.trim(),
         isDefault: false,
       };
@@ -108,11 +99,20 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     );
   }
-  const stock = validateCartStock(body.items);
+
+  let pricedItems: CartItem[];
+  let orderChannel: "local" | "dropship";
+  try {
+    ({ pricedItems, orderChannel } = buildPricedCheckoutItems(body.items, address.country));
+  } catch {
+    return NextResponse.json({ error: "Cart could not be priced." }, { status: 400 });
+  }
+
+  const stock = validateCartStockForCheckout(body.items, address.country);
   if (!stock.ok) return NextResponse.json({ error: stock.message }, { status: 400 });
 
-  const subtotal = body.items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
-  const shipping = computeShippingForItems(body.items);
+  const subtotal = pricedItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+  const shipping = computeShippingForItems(pricedItems);
   let discountAmountAUD = 0;
   let discountCode: string | null = null;
   if (body.discountCode?.trim()) {
@@ -134,6 +134,7 @@ export async function POST(request: NextRequest) {
     discountCode,
     totalAUD: subtotal - discountAmountAUD + shipping,
     address,
+    fulfillmentChannel: orderChannel,
+    useGlobalFulfillmentNotice: orderChannel === "dropship",
   });
 }
-

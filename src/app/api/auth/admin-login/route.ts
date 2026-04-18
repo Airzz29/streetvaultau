@@ -12,10 +12,14 @@ export async function POST(request: NextRequest) {
   const email = body.email?.trim().toLowerCase() ?? "";
   const password = body.password ?? "";
   const user = getUserByEmail(email);
-  if (!user || user.role !== "admin" || !verifyPassword(password, user.passwordHash)) {
+  if (
+    !user ||
+    (user.role !== "admin" && user.role !== "supplier") ||
+    !verifyPassword(password, user.passwordHash)
+  ) {
     return NextResponse.json({ error: "Invalid admin credentials." }, { status: 401 });
   }
   await createUserSession(user.id, user.role);
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, role: user.role });
 }
 

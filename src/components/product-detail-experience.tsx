@@ -114,8 +114,16 @@ export function ProductDetailExperience({
             }}
           />
           <div className="space-y-2 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 text-sm text-zinc-400">
-            <p>1-3 day express shipping in Australia only</p>
-            <p>Returns accepted within 14 days</p>
+            {product.fulfillmentType === "dropship" ? (
+              <p>
+                This item ships via our global fulfillment line. Tracking may take up to five business days to appear.
+              </p>
+            ) : (
+              <>
+                <p>Express shipping Australia-wide; international orders route through our global fulfillment line.</p>
+                <p>Returns accepted within 14 days</p>
+              </>
+            )}
             <p>Secure checkout powered by Stripe</p>
           </div>
         </div>

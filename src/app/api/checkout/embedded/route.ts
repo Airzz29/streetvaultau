@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
 import { CartItem } from "@/types/product";
 import {
+  buildPricedCheckoutItems,
   computeShippingForItems,
   createUserAddress,
   getUserAddressById,
   upsertCheckoutDraft,
+  validateCartStockForCheckout,
   validateDiscountCode,
-  validateCartStock,
 } from "@/lib/store-db";
 import { buildStripeProductData } from "@/lib/stripe-checkout-images";
 import { requireUser } from "@/lib/auth";
@@ -32,11 +33,6 @@ type EmbeddedCheckoutRequestBody = {
   discountCode?: string;
 };
 
-function isAustraliaOnlyCountry(value?: string | null) {
-  const normalized = (value ?? "").trim().toLowerCase();
-  return normalized === "australia" || normalized === "au";
-}
-
 export async function POST(request: NextRequest) {
   try {
     const user = await requireUser();
@@ -48,15 +44,8 @@ export async function POST(request: NextRequest) {
     if (!body.items?.length) {
       return NextResponse.json({ error: "Cart is empty." }, { status: 400 });
     }
-    const stockCheck = validateCartStock(body.items);
-    if (!stockCheck.ok) {
-      return NextResponse.json({ error: stockCheck.message }, { status: 400 });
-    }
 
     let address = body.addressId ? getUserAddressById(user.id, body.addressId) : null;
-    if (address && !isAustraliaOnlyCountry(address.country)) {
-      return NextResponse.json({ error: "Checkout currently supports Australia shipping only." }, { status: 400 });
-    }
     if (!address && body.shippingAddress) {
       const input = body.shippingAddress;
       if (
@@ -73,9 +62,7 @@ export async function POST(request: NextRequest) {
       if (!input.phone?.trim()) {
         return NextResponse.json({ error: "Mobile number is required for shipping." }, { status: 400 });
       }
-      if (!isAustraliaOnlyCountry(input.country)) {
-        return NextResponse.json({ error: "Checkout currently supports Australia shipping only." }, { status: 400 });
-      }
+      const countryLabel = input.country.trim();
       if (body.saveAddressForFuture) {
         const updatedAddresses = createUserAddress(user.id, {
           firstName: input.firstName,
@@ -85,7 +72,7 @@ export async function POST(request: NextRequest) {
           city: input.city,
           stateRegion: input.stateRegion,
           postcode: input.postcode,
-          country: "Australia",
+          country: countryLabel,
           phone: input.phone,
           isDefault: false,
         });
@@ -109,7 +96,7 @@ export async function POST(request: NextRequest) {
           city: input.city.trim(),
           stateRegion: input.stateRegion.trim(),
           postcode: input.postcode.trim(),
-          country: "Australia",
+          country: countryLabel,
           phone: input.phone.trim(),
           isDefault: false,
         };
@@ -125,7 +112,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const subtotalAUD = body.items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+    let pricedItems: CartItem[];
+    try {
+      ({ pricedItems } = buildPricedCheckoutItems(body.items, address.country));
+    } catch {
+      return NextResponse.json({ error: "Cart could not be priced." }, { status: 400 });
+    }
+
+    const stockCheck = validateCartStockForCheckout(body.items, address.country);
+    if (!stockCheck.ok) {
+      return NextResponse.json({ error: stockCheck.message }, { status: 400 });
+    }
+
+    const subtotalAUD = pricedItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
     let discountAmountAUD = 0;
     let appliedCode: string | null = null;
     if (body.discountCode?.trim()) {
@@ -140,7 +139,7 @@ export async function POST(request: NextRequest) {
       discountAmountAUD = validation.discountAmountAUD;
       appliedCode = validation.code;
     }
-    const discountedItems = applyDiscountAcrossItems(body.items, discountAmountAUD);
+    const discountedItems = applyDiscountAcrossItems(pricedItems, discountAmountAUD);
 
     const origin = resolveAppBaseUrl(request);
     const lineItems = discountedItems.map((cartItem) => ({
@@ -155,7 +154,7 @@ export async function POST(request: NextRequest) {
         unit_amount: cartItem.discountedUnitAmountCents,
       },
     }));
-    const shippingTotal = computeShippingForItems(body.items);
+    const shippingTotal = computeShippingForItems(pricedItems);
     if (shippingTotal > 0) {
       lineItems.push({
         quantity: 1,
@@ -179,7 +178,6 @@ export async function POST(request: NextRequest) {
       mode: "payment",
       ui_mode: "embedded_page",
       payment_method_types: ["card"],
-      shipping_address_collection: { allowed_countries: ["AU"] },
       line_items: lineItems,
       return_url: `${origin}/success?session_id={CHECKOUT_SESSION_ID}`,
     };
@@ -187,7 +185,7 @@ export async function POST(request: NextRequest) {
     const session = await stripe.checkout.sessions.create(sessionParams);
 
     upsertCheckoutDraft(session.id, {
-      items: body.items,
+      items: pricedItems,
       userId: user.id,
       customerEmail: user.email,
       selectedAddressId: body.addressId || "manual-entry",

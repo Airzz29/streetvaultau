@@ -20,13 +20,23 @@ async function readSessionPayload(token: string) {
   }
 }
 
-async function resolveAdminSession(request: NextRequest) {
+type StaffResolution = {
+  isLoggedIn: boolean;
+  isAdmin: boolean;
+  isSupplier: boolean;
+};
+
+async function resolveStaffSession(request: NextRequest): Promise<StaffResolution> {
   const token = request.cookies.get(AUTH_COOKIE_NAME)?.value;
-  if (!token) return { isLoggedIn: false, isAdmin: false };
+  if (!token) return { isLoggedIn: false, isAdmin: false, isSupplier: false };
   const payload = await readSessionPayload(token);
-  if (!payload) return { isLoggedIn: false, isAdmin: false };
-  const isAdmin = payload.role === "admin";
-  return { isLoggedIn: true, isAdmin };
+  if (!payload) return { isLoggedIn: false, isAdmin: false, isSupplier: false };
+  const role = payload.role;
+  return {
+    isLoggedIn: true,
+    isAdmin: role === "admin",
+    isSupplier: role === "supplier",
+  };
 }
 
 export async function middleware(request: NextRequest) {
@@ -36,23 +46,43 @@ export async function middleware(request: NextRequest) {
   const isLoggedIn = Boolean(payload);
 
   if (pathname.startsWith("/api/admin") || pathname.startsWith("/admin")) {
-    const strict = await resolveAdminSession(request);
+    const staff = await resolveStaffSession(request);
+    const isDropshipApi = pathname.startsWith("/api/admin/dropship");
 
     if (pathname.startsWith("/api/admin")) {
-      if (!strict.isAdmin) {
+      if (!staff.isLoggedIn) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+      if (isDropshipApi) {
+        if (!staff.isAdmin && !staff.isSupplier) {
+          return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+      } else if (!staff.isAdmin) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
       return NextResponse.next();
     }
 
     if (pathname === "/admin/login") {
-      if (strict.isAdmin) {
+      if (staff.isAdmin) {
         return NextResponse.redirect(new URL("/admin/dashboard", request.url));
+      }
+      if (staff.isSupplier) {
+        return NextResponse.redirect(new URL("/admin/dropship", request.url));
       }
       return NextResponse.next();
     }
 
-    if (!strict.isAdmin) {
+    if (pathname.startsWith("/admin/dropship")) {
+      if (!staff.isAdmin && !staff.isSupplier) {
+        return NextResponse.redirect(
+          new URL(`/admin/login?next=${encodeURIComponent(pathname + search)}`, request.url)
+        );
+      }
+      return NextResponse.next();
+    }
+
+    if (!staff.isAdmin) {
       return NextResponse.redirect(
         new URL(`/admin/login?next=${encodeURIComponent(pathname + search)}`, request.url)
       );
@@ -76,9 +106,7 @@ export async function middleware(request: NextRequest) {
 
   if (pathname.startsWith("/account")) {
     if (!isLoggedIn) {
-      return NextResponse.redirect(
-        new URL(`/login?next=${encodeURIComponent(pathname + search)}`, request.url)
-      );
+      return NextResponse.redirect(new URL(`/login?next=${encodeURIComponent(pathname + search)}`, request.url));
     }
   }
 
@@ -101,4 +129,3 @@ export const config = {
     "/api/checkout/:path*",
   ],
 };
-

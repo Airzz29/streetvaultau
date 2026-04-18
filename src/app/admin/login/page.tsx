@@ -26,7 +26,7 @@ export default function AdminLoginPage() {
         setError(data.error ?? "Admin login failed.");
         return;
       }
-      router.push("/admin/dashboard");
+      router.push(data.role === "supplier" ? "/admin/dropship" : "/admin/dashboard");
       router.refresh();
     } finally {
       setLoading(false);

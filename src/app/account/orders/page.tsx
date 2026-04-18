@@ -1,6 +1,7 @@
 import { requireUser } from "@/lib/auth";
 import { DisplayPrice } from "@/components/display-price";
 import { listOrdersByCustomerEmail, listOrdersByUserId, listReviewableOrderItems } from "@/lib/store-db";
+import { trackingUrl } from "@/lib/tracking-links";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -59,7 +60,7 @@ export default async function AccountOrdersPage() {
                   {order.trackingCode}
                 </p>
                 <a
-                  href={`https://auspost.com.au/mypost/track/details/${encodeURIComponent(order.trackingCode)}`}
+                  href={trackingUrl(order.trackingCode, order.trackingProvider ?? "auspost")}
                   target="_blank"
                   rel="noreferrer"
                   className="mt-2 inline-flex min-h-10 items-center rounded-xl bg-zinc-100 px-4 py-2 text-sm font-semibold text-zinc-900"

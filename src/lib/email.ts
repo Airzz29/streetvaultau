@@ -1,5 +1,6 @@
 import nodemailer from "nodemailer";
 import { resolveAppBaseUrl } from "@/lib/app-url";
+import { trackingUrl, type TrackingProvider } from "@/lib/tracking-links";
 
 function getTransport() {
   const host = process.env.EMAIL_SMTP_HOST ?? "smtp.gmail.com";
@@ -297,15 +298,16 @@ export async function sendShippingConfirmationEmail(params: {
   customerName?: string | null;
   orderId: string;
   trackingNumber: string;
+  /** Defaults to AusPost for backward compatibility. */
+  trackingProvider?: TrackingProvider;
   items?: Array<{ name: string; size: string; quantity: number; image?: string | null }>;
 }) {
   const transport = getTransport();
   const from = process.env.EMAIL_FROM ?? process.env.EMAIL_SMTP_USER;
   if (!transport || !from) return { sent: false };
   const siteUrl = resolveAppBaseUrl();
-  const trackUrl = `https://auspost.com.au/mypost/track/details/${encodeURIComponent(
-    params.trackingNumber
-  )}`;
+  const provider = params.trackingProvider ?? "auspost";
+  const trackUrl = trackingUrl(params.trackingNumber, provider);
   const orderItemsHtml = renderOrderItemsEmailTable((params.items ?? []).slice(0, 8), siteUrl);
   await transport.sendMail({
     from,

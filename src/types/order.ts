@@ -1,3 +1,5 @@
+import type { FulfillmentChannel } from "@/lib/fulfillment";
+import type { TrackingProvider } from "@/lib/tracking-links";
 import { CartItem } from "@/types/product";
 
 export type OrderStatus =
@@ -31,6 +33,8 @@ export type Order = {
   paymentStatus: "unpaid" | "paid" | "failed";
   fulfillmentStatus: "pending" | "shipped" | "delivered";
   trackingCode: string | null;
+  fulfillmentChannel: FulfillmentChannel;
+  trackingProvider: TrackingProvider | null;
   shippingEmailSentAt?: string | null;
   deliveredEmailSentAt?: string | null;
   subtotalAUD: number;

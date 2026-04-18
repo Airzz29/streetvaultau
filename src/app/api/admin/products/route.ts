@@ -66,6 +66,8 @@ export async function POST(request: NextRequest) {
     newArrival: body.newArrival ?? false,
     outfitSlot: body.outfitSlot,
     tags: body.tags ?? [],
+    fulfillmentType: body.fulfillmentType === "dropship" ? "dropship" : "physical",
+    globalSurchargeAud: Math.max(0, Number(body.globalSurchargeAud ?? 0)),
     variants: body.variants ?? [],
   });
   const created = getProductBySlug(body.slug);
@@ -149,6 +151,8 @@ export async function PATCH(request: NextRequest) {
     newArrival: body.newArrival ?? false,
     outfitSlot: body.outfitSlot,
     tags: body.tags ?? [],
+    fulfillmentType: body.fulfillmentType === "dropship" ? "dropship" : "physical",
+    globalSurchargeAud: Math.max(0, Number(body.globalSurchargeAud ?? 0)),
     variants: body.variants ?? [],
   });
   const updated = getProductById(body.id);

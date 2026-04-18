@@ -16,23 +16,29 @@ services:
         value: production
       - key: NEXT_TELEMETRY_DISABLED
         value: "1"
+      # Match .env.example / app code (AUTH_SECRET is required for sessions)
+      - key: AUTH_SECRET
+        sync: false
+      # Public site URL(s) — set to your Render URL or custom domain
+      - key: APP_URL
+        sync: false
+      - key: NEXT_PUBLIC_SITE_URL
+        sync: false
+      - key: SITE_URL
+        sync: false
       - key: STRIPE_SECRET_KEY
         sync: false
       - key: NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
         sync: false
       - key: STRIPE_WEBHOOK_SECRET
         sync: false
-      - key: APP_URL
+      - key: EMAIL_SMTP_HOST
         sync: false
-      - key: JWT_SECRET
+      - key: EMAIL_SMTP_PORT
         sync: false
-      - key: SMTP_HOST
+      - key: EMAIL_SMTP_USER
         sync: false
-      - key: SMTP_PORT
+      - key: EMAIL_SMTP_PASS
         sync: false
-      - key: SMTP_USER
-        sync: false
-      - key: SMTP_PASSWORD
-        sync: false
-      - key: SMTP_FROM
+      - key: EMAIL_FROM
         sync: false

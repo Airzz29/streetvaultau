@@ -49,7 +49,7 @@ export function hashProvidedResetToken(token: string) {
   return hashResetToken(token);
 }
 
-export async function createUserSession(userId: string, role: "customer" | "admin") {
+export async function createUserSession(userId: string, role: "customer" | "admin" | "supplier") {
   const sessionId = randomBytes(24).toString("hex");
   const nowSeconds = Math.floor(Date.now() / 1000);
   const expSeconds = nowSeconds + SESSION_TTL_SECONDS;
@@ -143,6 +143,13 @@ export async function requireUser() {
 export async function requireAdmin() {
   const session = await getCurrentSession();
   if (!session || session.user.role !== "admin") return null;
+  return session.user;
+}
+
+/** Admin or supplier (dropship staff). JWT role must match DB after promotion. */
+export async function requireStaff() {
+  const session = await getCurrentSession();
+  if (!session || (session.user.role !== "admin" && session.user.role !== "supplier")) return null;
   return session.user;
 }
 
