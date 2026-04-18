@@ -131,3 +131,38 @@ export function getShippingCountryDisplayName(code: string | null | undefined): 
   const row = SHIPPING_COUNTRIES.find((c) => c.code === code.trim().toUpperCase());
   return row?.name ?? null;
 }
+
+const LOOSE_COUNTRY_TO_CODE: Record<string, string> = {
+  usa: "US",
+  america: "US",
+  us: "US",
+  uk: "GB",
+  britain: "GB",
+  england: "GB",
+  australia: "AU",
+  nz: "NZ",
+  aus: "AU",
+};
+
+/** Resolve stored display labels / ISO-ish text to ISO2 when possible (checkout address matching). */
+export function canonicalShippingCountryCode(raw: string | null | undefined): string | null {
+  if (!raw?.trim()) return null;
+  const s = raw.trim();
+  const upper = s.toUpperCase();
+  const direct = SHIPPING_COUNTRIES.find((c) => c.code === upper);
+  if (direct) return direct.code;
+  const lower = s.toLowerCase();
+  const byName = SHIPPING_COUNTRIES.find((c) => c.name.toLowerCase() === lower);
+  if (byName) return byName.code;
+  const aliased = LOOSE_COUNTRY_TO_CODE[lower];
+  if (aliased) return aliased;
+  return null;
+}
+
+/** Same destination even if labels differ ("United States" vs "USA", ISO vs full name). */
+export function shippingCountriesMatch(a: string | null | undefined, b: string | null | undefined): boolean {
+  const ca = canonicalShippingCountryCode(a);
+  const cb = canonicalShippingCountryCode(b);
+  if (ca && cb) return ca === cb;
+  return (a ?? "").trim().toLowerCase() === (b ?? "").trim().toLowerCase();
+}

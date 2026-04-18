@@ -10,7 +10,7 @@ import {
 import { stripePromise } from "@/lib/stripe-client";
 import { useCart } from "@/context/cart-context";
 import { useCurrency } from "@/context/currency-context";
-import { getShippingCountryDisplayName } from "@/lib/currency-config";
+import { getShippingCountryDisplayName, shippingCountriesMatch } from "@/lib/currency-config";
 
 type Address = {
   id: string;
@@ -158,6 +158,28 @@ export default function CheckoutPage() {
     setNewAddress((prev) => ({ ...prev, country: initial }));
   }, [addressesLoaded, addresses, shippingCountryCode, lockedShippingCountry]);
 
+  /** When region lock is US but default saved address is AU (etc.), force “new address” or select first matching saved row. */
+  useEffect(() => {
+    if (!addressesLoaded || !lockedShippingCountry) return;
+    if (addresses.length === 0) {
+      setUseNewAddressForOrder(true);
+      return;
+    }
+    const selected = addresses.find((a) => a.id === selectedAddressId);
+    const selectedOk = Boolean(selected && shippingCountriesMatch(selected.country, lockedShippingCountry));
+    if (selectedOk) {
+      setUseNewAddressForOrder(false);
+      return;
+    }
+    const firstMatching = addresses.find((a) => shippingCountriesMatch(a.country, lockedShippingCountry));
+    if (firstMatching) {
+      setSelectedAddressId(firstMatching.id);
+      setUseNewAddressForOrder(false);
+      return;
+    }
+    setUseNewAddressForOrder(true);
+  }, [addressesLoaded, lockedShippingCountry, addresses, selectedAddressId]);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const fromQuery = params.get("discount");
@@ -269,9 +291,13 @@ export default function CheckoutPage() {
     const lock = lockedShippingCountry ?? AUSTRALIA_LABEL;
     const selectedAddress = addresses.find((address) => address.id === selectedAddressId);
     const shouldUseManualAddress = useNewAddressForOrder || !selectedAddress;
-    if (selectedAddress && selectedAddress.country.trim().toLowerCase() !== lock.trim().toLowerCase()) {
+    if (
+      !shouldUseManualAddress &&
+      selectedAddress &&
+      !shippingCountriesMatch(selectedAddress.country, lock)
+    ) {
       setQuoteError(
-        `This checkout is locked to ${lock}. Choose a matching saved address or clear selection.`
+        `This checkout is locked to ${lock}. Choose a matching saved address or switch to “Enter a new address” below.`
       );
       return;
     }
@@ -279,10 +305,7 @@ export default function CheckoutPage() {
       setQuoteError("Please add a mobile number to the selected delivery address.");
       return;
     }
-    if (
-      shouldUseManualAddress &&
-      newAddress.country.trim().toLowerCase() !== lock.trim().toLowerCase()
-    ) {
+    if (shouldUseManualAddress && !shippingCountriesMatch(newAddress.country, lock)) {
       setQuoteError(`Shipping country is locked to ${lock} for this checkout.`);
       return;
     }
@@ -384,8 +407,7 @@ export default function CheckoutPage() {
               </label>
               {addresses.map((address) => {
                 const mismatch =
-                  lockedShippingCountry &&
-                  address.country.trim().toLowerCase() !== lockedShippingCountry.trim().toLowerCase();
+                  lockedShippingCountry && !shippingCountriesMatch(address.country, lockedShippingCountry);
                 return (
                 <label
                   key={address.id}
