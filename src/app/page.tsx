@@ -27,11 +27,8 @@ export const metadata: Metadata = {
 export default function Home() {
   const products = listProductsForCards();
   const richProducts = listProductsWithVariants();
-  const bestSellerPool = products.filter((item) => item.tags.includes("best_seller"));
-  const fallbackPool = products.filter(
-    (item) => !bestSellerPool.some((bestSeller) => bestSeller.id === item.id)
-  );
-  const topSellers = [...bestSellerPool, ...fallbackPool].slice(0, 6);
+  /** Same source as admin catalog: newest active products with variants (`listProductsForCards` orders by `created_at`). */
+  const topSellers = products.slice(0, 6);
   const featuredFits = listPremadeFitCards().slice(0, 3);
   const latestReviews = listApprovedReviews(5);
 

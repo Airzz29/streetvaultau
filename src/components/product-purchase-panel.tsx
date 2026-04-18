@@ -120,7 +120,7 @@ export function ProductPurchasePanel({
     if (nextForColor) {
       setSelectedVariantId(nextForColor.id);
     }
-  }, [product.variants, selectedColor, selectedVariantId]);
+  }, [product, selectedColor, selectedVariantId]);
 
   const ensureLoggedInForCart = async () => {
     const response = await fetch("/api/auth/me", { cache: "no-store" });

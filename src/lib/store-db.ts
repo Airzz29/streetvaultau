@@ -127,6 +127,69 @@ type DbAdminInviteRow = {
   created_at: string;
 };
 
+const VALID_PRODUCT_CATEGORIES: readonly ProductCategory[] = [
+  "hoodie",
+  "tee",
+  "pants",
+  "cap",
+  "shoes",
+  "accessory",
+];
+
+/** Maps legacy DB values and human-readable labels to canonical keys used by `/clothes`, `/shop`, etc. */
+const PRODUCT_CATEGORY_ALIASES: Record<string, ProductCategory> = {
+  hoodie: "hoodie",
+  hoodies: "hoodie",
+  tee: "tee",
+  tees: "tee",
+  shirt: "tee",
+  shirts: "tee",
+  "t-shirt": "tee",
+  tshirt: "tee",
+  top: "tee",
+  tops: "tee",
+  pants: "pants",
+  bottoms: "pants",
+  jeans: "pants",
+  denim: "pants",
+  joggers: "pants",
+  shorts: "pants",
+  trouser: "pants",
+  trousers: "pants",
+  cargo: "pants",
+  shoes: "shoes",
+  sneaker: "shoes",
+  sneakers: "shoes",
+  footwear: "shoes",
+  cap: "cap",
+  caps: "cap",
+  hat: "cap",
+  hats: "cap",
+  accessory: "accessory",
+  accessories: "accessory",
+};
+
+function sqlCategoryValuesForCanonical(canonical: ProductCategory): string[] {
+  const values = new Set<string>();
+  for (const [alias, cat] of Object.entries(PRODUCT_CATEGORY_ALIASES)) {
+    if (cat === canonical) values.add(alias);
+  }
+  values.add(canonical);
+  return Array.from(values);
+}
+
+/** Normalize category strings from SQLite or forms so storefront filters match admin labels (e.g. "Shirts" → tee). */
+export function normalizeProductCategory(raw: string | null | undefined): ProductCategory {
+  const k = (raw ?? "").trim().toLowerCase();
+  if (!k) return "accessory";
+  const mapped = PRODUCT_CATEGORY_ALIASES[k];
+  if (mapped) return mapped;
+  if ((VALID_PRODUCT_CATEGORIES as readonly string[]).includes(k)) {
+    return k as ProductCategory;
+  }
+  return "accessory";
+}
+
 const dbDir = path.join(process.cwd(), "data");
 const dbPath = path.join(dbDir, "store.db");
 
@@ -661,7 +724,7 @@ function mapProduct(row: DbProductRow): Omit<ProductWithVariants, "variants"> {
       ? (JSON.parse(row.color_images_json) as ProductColorImageGroup[])
       : [],
     defaultVariantKey: row.default_variant_key,
-    category: row.category as ProductCategory,
+    category: normalizeProductCategory(row.category),
     description: row.description,
     compareAtPrice: row.compare_at_price,
     costPrice: row.cost_price,
@@ -796,7 +859,7 @@ export function listProductsForCards(): ProductCardData[] {
     productType: row.product_type,
     image: row.main_image ?? (JSON.parse(row.images_json) as string[])[0],
     builderImage: row.builder_image,
-    category: row.category as ProductCategory,
+    category: normalizeProductCategory(row.category),
     basePrice: row.base_price,
     compareAtPrice: row.compare_at_price,
     lowestStock: row.lowest_stock,
@@ -827,8 +890,11 @@ export function listProductsForCardsFiltered(input: {
 
   const normalizedCategory = input.category?.trim().toLowerCase();
   if (normalizedCategory && normalizedCategory !== "all") {
-    conditions.push("LOWER(p.category) = ?");
-    params.push(normalizedCategory);
+    const canonical = normalizeProductCategory(normalizedCategory);
+    const synonyms = sqlCategoryValuesForCanonical(canonical);
+    const placeholders = synonyms.map(() => "?").join(",");
+    conditions.push(`LOWER(p.category) IN (${placeholders})`);
+    params.push(...synonyms);
   }
 
   const normalizedSize = input.size?.trim().toLowerCase();
@@ -945,7 +1011,7 @@ export function listProductsForCardsFiltered(input: {
     productType: row.product_type,
     image: row.main_image ?? (JSON.parse(row.images_json) as string[])[0],
     builderImage: row.builder_image,
-    category: row.category as ProductCategory,
+    category: normalizeProductCategory(row.category),
     basePrice: row.base_price,
     compareAtPrice: row.compare_at_price,
     lowestStock: row.lowest_stock,
@@ -1415,6 +1481,7 @@ export function createProduct(input: ProductInput) {
   const createdAt = nowISO();
   const normalizedVariants = normalizeVariantsForStorage(input.slug, input.variants);
   const defaultVariantKey = resolveDefaultVariantKey(input.defaultVariantKey, normalizedVariants);
+  const category = normalizeProductCategory(input.category);
   db.transaction(() => {
     db.prepare(
       `INSERT INTO products (
@@ -1431,7 +1498,7 @@ export function createProduct(input: ProductInput) {
       input.productType ?? null,
       JSON.stringify(input.colorImageGroups ?? []),
       defaultVariantKey,
-      input.category,
+      category,
       input.description,
       input.compareAtPrice,
       input.costPrice,
@@ -1489,6 +1556,7 @@ export function updateProduct(input: ProductInput & { id: string }) {
   const now = nowISO();
   const normalizedVariants = normalizeVariantsForStorage(input.slug, input.variants);
   const defaultVariantKey = resolveDefaultVariantKey(input.defaultVariantKey, normalizedVariants);
+  const category = normalizeProductCategory(input.category);
   db.transaction(() => {
     db.prepare(
       `UPDATE products SET
@@ -1504,7 +1572,7 @@ export function updateProduct(input: ProductInput & { id: string }) {
       input.productType ?? null,
       JSON.stringify(input.colorImageGroups ?? []),
       defaultVariantKey,
-      input.category,
+      category,
       input.description,
       input.compareAtPrice,
       input.costPrice,
