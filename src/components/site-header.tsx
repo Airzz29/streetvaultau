@@ -1,16 +1,22 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { useCart } from "@/context/cart-context";
 import { categoryNavItems } from "@/components/category-nav";
+import { CurrencyPickerButton } from "@/components/currency-picker-button";
+import { ShippingRegionModal } from "@/components/shipping-region-modal";
 
 export function SiteHeader({ initialLoggedIn = false }: { initialLoggedIn?: boolean }) {
+  const pathname = usePathname();
   const { totalItems } = useCart();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const loggedIn = initialLoggedIn;
+  const isAdmin = pathname?.startsWith("/admin") ?? false;
 
   return (
+    <>
     <header className="sticky top-0 z-50 border-b border-white/5 bg-black/20 backdrop-blur-xl">
       <div className="mx-auto w-full max-w-7xl px-3 py-3 sm:px-6 lg:px-8">
         <div className="grid grid-cols-[auto_1fr_auto] items-center gap-2 sm:gap-3">
@@ -27,6 +33,7 @@ export function SiteHeader({ initialLoggedIn = false }: { initialLoggedIn?: bool
             StreetVault
           </Link>
           <div className="flex items-center justify-end gap-2">
+            {!isAdmin ? <CurrencyPickerButton /> : null}
             <Link
               href="/contact"
               className="hidden min-h-11 items-center rounded-full border border-zinc-700/60 px-4 text-sm text-zinc-200 hover:border-zinc-500 sm:inline-flex"
@@ -68,6 +75,7 @@ export function SiteHeader({ initialLoggedIn = false }: { initialLoggedIn?: bool
           </div>
         </div>
       </div>
+      {!isAdmin ? <ShippingRegionModal /> : null}
       <div
         className={`fixed inset-0 z-[60] bg-black/55 transition-opacity duration-300 md:hidden ${
           mobileMenuOpen ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
@@ -89,6 +97,22 @@ export function SiteHeader({ initialLoggedIn = false }: { initialLoggedIn?: bool
           </button>
         </div>
         <div className="grid gap-2">
+          {!isAdmin ? (
+            <button
+              type="button"
+              onClick={() => {
+                try {
+                  sessionStorage.removeItem("sv-shipping-region-confirmed-session");
+                } catch {
+                  // ignore
+                }
+                window.location.reload();
+              }}
+              className="rounded-xl border border-amber-400/25 bg-amber-500/10 px-4 py-3 text-left text-sm font-medium text-amber-100 hover:bg-amber-500/15"
+            >
+              Shipping region & currency
+            </button>
+          ) : null}
           {categoryNavItems.map((item) => (
             <Link
               key={item.href}
@@ -137,5 +161,7 @@ export function SiteHeader({ initialLoggedIn = false }: { initialLoggedIn?: bool
         </div>
       </div>
     </header>
+    {!isAdmin ? <ShippingRegionModal /> : null}
+    </>
   );
 }

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ProductWithVariants } from "@/types/product";
 import { useCart } from "@/context/cart-context";
-import { formatPriceAUD } from "@/lib/utils";
+import { useCurrency } from "@/context/currency-context";
 
 type ProductPurchasePanelProps = {
   product: ProductWithVariants;
@@ -21,6 +21,7 @@ export function ProductPurchasePanel({
   selectedColor: controlledSelectedColor,
   onColorChange,
 }: ProductPurchasePanelProps) {
+  const { formatPrice } = useCurrency();
   const router = useRouter();
   const { addItem } = useCart();
   const defaultVariant =
@@ -225,7 +226,7 @@ export function ProductPurchasePanel({
       <div className="flex items-center justify-between text-sm">
         <span className="text-zinc-400">Selected Price</span>
         <span className="font-semibold">
-          {formatPriceAUD((selectedVariant?.price ?? 0) * quantity)}
+          {formatPrice((selectedVariant?.price ?? 0) * quantity)}
         </span>
       </div>
 

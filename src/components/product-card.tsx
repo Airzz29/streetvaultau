@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRef, useState } from "react";
 import { ProductCardData } from "@/types/product";
-import { formatPriceAUD } from "@/lib/utils";
+import { useCurrency } from "@/context/currency-context";
 import { GlassCard } from "@/components/glass-card";
 
 type ProductCardProps = {
@@ -12,6 +12,7 @@ type ProductCardProps = {
 };
 
 export function ProductCard({ product }: ProductCardProps) {
+  const { formatPrice } = useCurrency();
   const lowStock = product.lowestStock > 0 && product.lowestStock <= 3;
   const outOfStock = product.totalStock <= 0;
   const [mobilePreviewOpen, setMobilePreviewOpen] = useState(false);
@@ -61,11 +62,11 @@ export function ProductCard({ product }: ProductCardProps) {
         </Link>
         <div className="flex items-center gap-2 text-sm">
           <span className="font-semibold text-zinc-100">
-            {formatPriceAUD(product.basePrice)}
+            {formatPrice(product.basePrice)}
           </span>
           {product.compareAtPrice ? (
             <span className="text-zinc-500 line-through">
-              {formatPriceAUD(product.compareAtPrice)}
+              {formatPrice(product.compareAtPrice)}
             </span>
           ) : null}
         </div>

@@ -8,7 +8,7 @@ import {
 } from "@stripe/react-stripe-js";
 import { stripePromise } from "@/lib/stripe-client";
 import { useCart } from "@/context/cart-context";
-import { formatPriceAUD } from "@/lib/utils";
+import { useCurrency } from "@/context/currency-context";
 
 type Address = {
   id: string;
@@ -36,6 +36,7 @@ type AddressSuggestion = {
 const AUSTRALIA_LABEL = "Australia";
 
 export default function CheckoutPage() {
+  const { formatPrice } = useCurrency();
   const { items } = useCart();
   const validItems = useMemo(() => items, [items]);
   const [addresses, setAddresses] = useState<Address[]>([]);
@@ -402,17 +403,20 @@ export default function CheckoutPage() {
             </div>
             {quote ? (
               <div className="mt-2 space-y-1 text-sm text-zinc-300">
-                <p>Subtotal: {formatPriceAUD(quote.subtotalAUD)}</p>
-                <p>Shipping: {formatPriceAUD(quote.shippingAUD)}</p>
+                <p>Subtotal: {formatPrice(quote.subtotalAUD)}</p>
+                <p>Shipping: {formatPrice(quote.shippingAUD)}</p>
                 <p className={quote.discountAmountAUD > 0 ? "text-emerald-300" : ""}>
-                  Discount: -{formatPriceAUD(quote.discountAmountAUD)}
+                  Discount: -{formatPrice(quote.discountAmountAUD)}
                 </p>
-                <p className="font-semibold">Total: {formatPriceAUD(quote.totalAUD)}</p>
+                <p className="font-semibold">Total: {formatPrice(quote.totalAUD)}</p>
                 {quote.discountCode ? (
                   <p className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-2 py-1 text-xs text-emerald-200">
-                    Code applied: {quote.discountCode} · You saved {formatPriceAUD(quote.discountAmountAUD)}
+                    Code applied: {quote.discountCode} · You saved {formatPrice(quote.discountAmountAUD)}
                   </p>
                 ) : null}
+                <p className="mt-2 text-[11px] leading-relaxed text-zinc-500">
+                  Quote totals are stored in AUD at checkout. Converted amounts above are estimates for browsing only.
+                </p>
               </div>
             ) : null}
           </div>

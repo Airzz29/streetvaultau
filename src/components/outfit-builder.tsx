@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { OutfitSlot, ProductWithVariants } from "@/types/product";
 import { useCart } from "@/context/cart-context";
-import { formatPriceAUD } from "@/lib/utils";
+import { useCurrency } from "@/context/currency-context";
 
 const slotLabels: Record<OutfitSlot, string> = {
   top: "Top",
@@ -17,6 +17,7 @@ type OutfitBuilderProps = {
 };
 
 export function OutfitBuilder({ products }: OutfitBuilderProps) {
+  const { formatPrice } = useCurrency();
   const slotOptions: Record<OutfitSlot, ProductWithVariants[]> = {
     top: products.filter((product) => product.outfitSlot === "top"),
     bottom: products.filter((product) => product.outfitSlot === "bottom"),
@@ -68,7 +69,7 @@ export function OutfitBuilder({ products }: OutfitBuilderProps) {
               {slot === "shoes" ? <option value="">Skip shoes</option> : null}
               {slotOptions[slot].map((product) => (
                 <option key={product.id} value={product.id}>
-                  {product.name} - {formatPriceAUD(product.variants[0]?.price ?? 0)}
+                  {product.name} - {formatPrice(product.variants[0]?.price ?? 0)}
                 </option>
               ))}
             </select>
@@ -81,12 +82,12 @@ export function OutfitBuilder({ products }: OutfitBuilderProps) {
         {selectedProducts.map((product) => (
           <div key={product.id} className="flex items-center justify-between text-sm text-zinc-300">
             <span>{product.name}</span>
-            <span>{formatPriceAUD(product.variants[0]?.price ?? 0)}</span>
+            <span>{formatPrice(product.variants[0]?.price ?? 0)}</span>
           </div>
         ))}
         <div className="flex items-center justify-between border-t border-zinc-800 pt-2 font-semibold">
           <span>Total</span>
-          <span>{formatPriceAUD(total)}</span>
+          <span>{formatPrice(total)}</span>
         </div>
       </div>
 

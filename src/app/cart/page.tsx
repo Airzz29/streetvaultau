@@ -5,9 +5,10 @@ import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/context/cart-context";
-import { formatPriceAUD } from "@/lib/utils";
+import { useCurrency } from "@/context/currency-context";
 
 export default function CartPage() {
+  const { formatPrice } = useCurrency();
   const { items, removeItem, removeBundle, updateQuantity } = useCart();
   const router = useRouter();
   const [discountCode, setDiscountCode] = useState("");
@@ -98,11 +99,11 @@ export default function CartPage() {
                           {item.color} / {item.size}
                         </p>
                         <p className="text-xs text-zinc-500">
-                          Shipping {formatPriceAUD(item.shippingRateAUD)} each
+                          Shipping {formatPrice(item.shippingRateAUD)} each
                         </p>
                       </div>
                       <p className="text-right text-base font-semibold">
-                        {formatPriceAUD(item.unitPrice * item.quantity)}
+                        {formatPrice(item.unitPrice * item.quantity)}
                       </p>
                     </div>
                   </div>
@@ -131,7 +132,7 @@ export default function CartPage() {
                     {item.color} / {item.size}
                   </p>
                   <p className="text-xs text-zinc-500">
-                    Shipping {formatPriceAUD(item.shippingRateAUD)} each
+                    Shipping {formatPrice(item.shippingRateAUD)} each
                   </p>
                 </div>
               </div>
@@ -155,7 +156,7 @@ export default function CartPage() {
                 </div>
                 <div className="flex items-center gap-3">
                   <p className="text-right text-base font-semibold">
-                    {formatPriceAUD(item.unitPrice * item.quantity)}
+                    {formatPrice(item.unitPrice * item.quantity)}
                   </p>
                   <button
                     onClick={() => removeItem(item.variantId)}
@@ -173,15 +174,15 @@ export default function CartPage() {
           <p className="text-sm uppercase tracking-[0.18em] text-zinc-400">Order Summary</p>
           <div className="flex items-center justify-between text-sm">
             <span className="text-zinc-400">Subtotal</span>
-            <span>{formatPriceAUD(subtotal)}</span>
+            <span>{formatPrice(subtotal)}</span>
           </div>
           <div className="flex items-center justify-between text-sm">
             <span className="text-zinc-400">Shipping</span>
-            <span>{shipping === 0 ? "Free" : formatPriceAUD(shipping)}</span>
+            <span>{shipping === 0 ? "Free" : formatPrice(shipping)}</span>
           </div>
           <div className="flex items-center justify-between border-t border-zinc-800 pt-3 text-lg font-semibold">
             <span>Total</span>
-            <span>{formatPriceAUD(total)}</span>
+            <span>{formatPrice(total)}</span>
           </div>
           <button
             onClick={() => {

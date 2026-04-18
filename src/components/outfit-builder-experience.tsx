@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Rnd } from "react-rnd";
 import { ProductWithVariants } from "@/types/product";
 import { useCart } from "@/context/cart-context";
-import { formatPriceAUD } from "@/lib/utils";
+import { useCurrency } from "@/context/currency-context";
 import { GlassCard } from "@/components/glass-card";
 import { BackNavButton } from "@/components/back-nav-button";
 
@@ -66,6 +66,7 @@ export function OutfitBuilderExperience({
   compact = false,
 }: OutfitBuilderExperienceProps) {
   const router = useRouter();
+  const { formatPrice } = useCurrency();
   const { addItems } = useCart();
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const availableProducts = products.filter((p) => p.variants.some((v) => v.stock > 0));
@@ -437,7 +438,7 @@ export function OutfitBuilderExperience({
           <div className="rounded-xl border border-white/10 bg-black/20 p-3">
             <div className="flex items-center justify-between text-sm">
               <span className="text-zinc-300">Outfit total</span>
-              <span className="font-semibold">{formatPriceAUD(total)}</span>
+              <span className="font-semibold">{formatPrice(total)}</span>
             </div>
           </div>
 

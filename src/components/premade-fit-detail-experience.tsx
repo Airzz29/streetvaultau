@@ -6,7 +6,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PremadeFit, PremadeFitCard } from "@/types/premade-fit";
 import { useCart } from "@/context/cart-context";
-import { formatPriceAUD } from "@/lib/utils";
+import { useCurrency } from "@/context/currency-context";
 import { BackNavButton } from "@/components/back-nav-button";
 import { PremadeFitCardView } from "@/components/premade-fit-card";
 
@@ -31,6 +31,7 @@ export function PremadeFitDetailExperience({
   relatedFits: PremadeFitCard[];
 }) {
   const router = useRouter();
+  const { formatPrice } = useCurrency();
   const { addItems } = useCart();
   const [activeImage, setActiveImage] = useState(fit.coverImage || fit.galleryImages[0]);
   const [selection, setSelection] = useState<Record<string, { color: string; variantId: string }>>(() => {
@@ -141,13 +142,13 @@ export function PremadeFitDetailExperience({
           <p className="text-zinc-300">{fit.description}</p>
           <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
             <div className="flex items-center gap-3">
-              <p className="text-2xl font-semibold">{formatPriceAUD(bundlePrice)}</p>
+              <p className="text-2xl font-semibold">{formatPrice(bundlePrice)}</p>
               {bundleCompareAt > bundlePrice ? (
-                <p className="text-zinc-500 line-through">{formatPriceAUD(bundleCompareAt)}</p>
+                <p className="text-zinc-500 line-through">{formatPrice(bundleCompareAt)}</p>
               ) : null}
             </div>
             {bundleSavings > 0 ? (
-              <p className="mt-1 text-sm text-emerald-300">Bundle savings: {formatPriceAUD(bundleSavings)}</p>
+              <p className="mt-1 text-sm text-emerald-300">Bundle savings: {formatPrice(bundleSavings)}</p>
             ) : null}
             <p className="mt-2 text-sm text-zinc-400">Includes {fit.items.length} real products.</p>
           </div>
@@ -271,7 +272,7 @@ export function PremadeFitDetailExperience({
                       </div>
                     ) : null}
                     <p className="text-sm text-zinc-300">
-                      {variant ? formatPriceAUD(variant.price) : "Unavailable"}
+                      {variant ? formatPrice(variant.price) : "Unavailable"}
                     </p>
                   </div>
                 </div>

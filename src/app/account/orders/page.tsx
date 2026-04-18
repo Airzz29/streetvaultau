@@ -1,5 +1,5 @@
 import { requireUser } from "@/lib/auth";
-import { formatPriceAUD } from "@/lib/utils";
+import { DisplayPrice } from "@/components/display-price";
 import { listOrdersByCustomerEmail, listOrdersByUserId, listReviewableOrderItems } from "@/lib/store-db";
 import Image from "next/image";
 import Link from "next/link";
@@ -90,7 +90,7 @@ export default async function AccountOrdersPage() {
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-zinc-100">{item.name}</p>
                     <p className="text-xs text-zinc-400">
-                      Size {item.size} - {formatPriceAUD(item.unitPrice)} each
+                      Size {item.size} - <DisplayPrice amountAud={item.unitPrice} /> each
                     </p>
                     {item.orderItemId && order.paymentStatus === "paid" ? (
                       <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -121,19 +121,27 @@ export default async function AccountOrdersPage() {
             <div className="rounded-xl border border-white/10 bg-black/30 p-3 text-xs text-zinc-300">
               <div className="flex items-center justify-between">
                 <span>Subtotal</span>
-                <span>{formatPriceAUD(order.subtotalAUD)}</span>
+                <span>
+                  <DisplayPrice amountAud={order.subtotalAUD} />
+                </span>
               </div>
               <div className="mt-1 flex items-center justify-between">
                 <span>Shipping</span>
-                <span>{formatPriceAUD(order.shippingAUD)}</span>
+                <span>
+                  <DisplayPrice amountAud={order.shippingAUD} />
+                </span>
               </div>
               <div className="mt-1 flex items-center justify-between">
                 <span>Discount{order.discountCode ? ` (${order.discountCode})` : ""}</span>
-                <span>-{formatPriceAUD(order.discountAmountAUD ?? 0)}</span>
+                <span>
+                  -<DisplayPrice amountAud={order.discountAmountAUD ?? 0} />
+                </span>
               </div>
               <div className="mt-2 flex items-center justify-between border-t border-white/10 pt-2 text-sm font-semibold">
                 <span>Total paid</span>
-                <span>{formatPriceAUD(order.revenueAUD)}</span>
+                <span>
+                  <DisplayPrice amountAud={order.revenueAUD} />
+                </span>
               </div>
             </div>
             <div className="rounded-xl border border-white/10 bg-black/30 p-3 text-xs text-zinc-300">

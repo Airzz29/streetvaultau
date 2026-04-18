@@ -3,9 +3,10 @@
 import Image from "next/image";
 import Link from "next/link";
 import { PremadeFitCard } from "@/types/premade-fit";
-import { formatPriceAUD } from "@/lib/utils";
+import { useCurrency } from "@/context/currency-context";
 
 export function PremadeFitCardView({ fit }: { fit: PremadeFitCard }) {
+  const { formatPrice } = useCurrency();
   return (
     <Link
       href={`/premade-fits/${fit.slug}`}
@@ -26,7 +27,7 @@ export function PremadeFitCardView({ fit }: { fit: PremadeFitCard }) {
         <p className="line-clamp-2 text-sm text-zinc-400">{fit.description}</p>
         <div className="flex items-center justify-between text-sm">
           <span className="text-zinc-300">{fit.itemCount} items</span>
-          <span className="font-semibold text-zinc-100">{formatPriceAUD(fit.minPriceAUD)}</span>
+          <span className="font-semibold text-zinc-100">{formatPrice(fit.minPriceAUD)}</span>
         </div>
       </div>
     </Link>

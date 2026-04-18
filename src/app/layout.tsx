@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import { CartProvider } from "@/context/cart-context";
+import { CurrencyProvider } from "@/context/currency-context";
 import { SiteHeader } from "@/components/site-header";
 import { Footer } from "@/components/footer";
 import { SiteBackground } from "@/components/site-background";
@@ -115,15 +116,17 @@ export default async function RootLayout({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }}
         />
         <CartProvider>
-          <SiteBackground />
-          <div className="relative z-[20] flex min-h-screen flex-col">
-            <SiteHeader initialLoggedIn={Boolean(user)} />
-            <main className="mx-auto w-full max-w-7xl flex-1 px-3 py-4 sm:px-6 sm:py-5 lg:px-8">
-              {children}
-            </main>
-            <Footer />
-          </div>
-          <CartAddToast />
+          <CurrencyProvider>
+            <SiteBackground />
+            <div className="relative z-[20] flex min-h-screen flex-col">
+              <SiteHeader initialLoggedIn={Boolean(user)} />
+              <main className="mx-auto w-full max-w-7xl flex-1 px-3 py-4 sm:px-6 sm:py-5 lg:px-8">
+                {children}
+              </main>
+              <Footer />
+            </div>
+            <CartAddToast />
+          </CurrencyProvider>
         </CartProvider>
       </body>
     </html>

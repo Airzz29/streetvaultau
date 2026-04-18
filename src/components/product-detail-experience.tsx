@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { ProductCardData, ProductWithVariants } from "@/types/product";
 import { ProductPurchasePanel } from "@/components/product-purchase-panel";
 import { ProductCard } from "@/components/product-card";
-import { formatPriceAUD } from "@/lib/utils";
+import { useCurrency } from "@/context/currency-context";
 import { GlassCard } from "@/components/glass-card";
 import { ProductReview } from "@/types/review";
 import { ReviewCard } from "@/components/review-card";
@@ -43,6 +43,7 @@ export function ProductDetailExperience({
   reviews,
   hasMoreReviews,
 }: ProductDetailExperienceProps) {
+  const { formatPrice } = useCurrency();
   const defaultVariant =
     product.variants.find(
       (variant) =>
@@ -97,9 +98,9 @@ export function ProductDetailExperience({
           <p className="text-xs uppercase tracking-[0.2em] text-zinc-400">{product.category}</p>
           <h1 className="text-2xl font-semibold sm:text-4xl">{product.name}</h1>
           <div className="flex items-center gap-3">
-            <p className="text-2xl font-semibold">{formatPriceAUD(startingPrice)}</p>
+            <p className="text-2xl font-semibold">{formatPrice(startingPrice)}</p>
             {product.compareAtPrice ? (
-              <p className="text-zinc-500 line-through">{formatPriceAUD(product.compareAtPrice)}</p>
+              <p className="text-zinc-500 line-through">{formatPrice(product.compareAtPrice)}</p>
             ) : null}
           </div>
           <p className="text-zinc-300">{product.description}</p>
