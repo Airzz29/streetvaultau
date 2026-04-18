@@ -3,14 +3,19 @@ import { requireUser } from "@/lib/auth";
 import { CartItem } from "@/types/product";
 import { clearUserCart, listUserCartItems, replaceUserCart } from "@/lib/store-db";
 
+const MAX_LINES = 40;
+const MAX_QTY_PER_LINE = 99;
+
 function sanitizeCartItems(items: CartItem[]) {
-  return items
+  const trimmed = items
     .filter((item) => item.variantId && item.productId && item.quantity > 0)
+    .slice(0, MAX_LINES)
     .map((item) => ({
       ...item,
-      quantity: Math.max(1, Math.floor(item.quantity)),
+      quantity: Math.min(MAX_QTY_PER_LINE, Math.max(1, Math.floor(item.quantity))),
       shippingRateAUD: item.shippingRateAUD ?? 0,
     }));
+  return trimmed;
 }
 
 export async function GET() {

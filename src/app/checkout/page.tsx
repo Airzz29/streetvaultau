@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
   EmbeddedCheckout,
@@ -9,6 +10,7 @@ import {
 import { stripePromise } from "@/lib/stripe-client";
 import { useCart } from "@/context/cart-context";
 import { useCurrency } from "@/context/currency-context";
+import { getShippingCountryDisplayName } from "@/lib/currency-config";
 
 type Address = {
   id: string;
@@ -36,9 +38,22 @@ type AddressSuggestion = {
 const AUSTRALIA_LABEL = "Australia";
 
 export default function CheckoutPage() {
-  const { formatPrice } = useCurrency();
+  const router = useRouter();
+  const { formatPrice, shippingCountryCode } = useCurrency();
   const { items } = useCart();
   const validItems = useMemo(() => items, [items]);
+  const cartFingerprint = useMemo(
+    () =>
+      JSON.stringify(
+        items.map((i) => ({
+          p: i.productId,
+          v: i.variantId,
+          q: i.quantity,
+          b: i.bundleId ?? "",
+        }))
+      ),
+    [items]
+  );
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [addressesLoaded, setAddressesLoaded] = useState(false);
   const [selectedAddressId, setSelectedAddressId] = useState("");
@@ -47,6 +62,8 @@ export default function CheckoutPage() {
   const [quoteMessage, setQuoteMessage] = useState("");
   const [quote, setQuote] = useState<{
     subtotalAUD: number;
+    retailSubtotalAUD?: number;
+    globalSurchargeAUD?: number;
     shippingAUD: number;
     discountAmountAUD: number;
     totalAUD: number;
@@ -97,6 +114,10 @@ export default function CheckoutPage() {
   };
 
   useEffect(() => {
+    router.refresh();
+  }, [router]);
+
+  useEffect(() => {
     if (addressesLoaded) return;
     loadAddresses().catch(() => {
       setAddressesLoaded(true);
@@ -104,12 +125,38 @@ export default function CheckoutPage() {
   }, [addressesLoaded]);
 
   useEffect(() => {
-    if (!addressesLoaded || lockedShippingCountry !== null) return;
+    setReadyForStripe(false);
+    setQuote(null);
+    setQuoteError("");
+  }, [cartFingerprint]);
+
+  useEffect(() => {
+    if (lockedShippingCountry !== null) return;
+
+    let prefLabel = getShippingCountryDisplayName(shippingCountryCode);
+    if (!prefLabel && typeof window !== "undefined") {
+      try {
+        prefLabel = getShippingCountryDisplayName(
+          window.localStorage.getItem("streetvault-shipping-country")
+        );
+      } catch {
+        // ignore
+      }
+    }
+
+    if (prefLabel) {
+      setLockedShippingCountry(prefLabel);
+      setNewAddress((prev) => ({ ...prev, country: prefLabel }));
+      return;
+    }
+
+    if (!addressesLoaded) return;
+
     const defaultAddr = addresses.find((a) => a.isDefault) ?? addresses[0];
     const initial = (defaultAddr?.country ?? AUSTRALIA_LABEL).trim() || AUSTRALIA_LABEL;
     setLockedShippingCountry(initial);
     setNewAddress((prev) => ({ ...prev, country: initial }));
-  }, [addressesLoaded, addresses, lockedShippingCountry]);
+  }, [addressesLoaded, addresses, shippingCountryCode, lockedShippingCountry]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -447,7 +494,8 @@ export default function CheckoutPage() {
               className="min-h-12 w-full cursor-not-allowed rounded-lg border border-white/15 bg-black/40 px-3 text-base text-zinc-300"
             />
             <p className="text-[11px] text-zinc-500 sm:col-span-2">
-              Shipping country is set from your first visit to checkout and cannot be changed here.
+              Shipping country matches your storefront region (shipping &amp; currency picker) for this session and
+              cannot be changed on this page—use the site header region tool if you need a different destination.
             </p>
           </div>
           <label className="flex items-center gap-2 text-sm text-zinc-300">
@@ -479,6 +527,16 @@ export default function CheckoutPage() {
             </div>
             {quote ? (
               <div className="mt-2 space-y-1 text-sm text-zinc-300">
+                {quote.retailSubtotalAUD != null && quote.globalSurchargeAUD != null && quote.globalSurchargeAUD > 0 ? (
+                  <>
+                    <p className="text-xs text-zinc-500">
+                      Item retail (AUD base): {formatPrice(quote.retailSubtotalAUD)}
+                    </p>
+                    <p className="text-sky-200">
+                      Global fulfillment surcharge: +{formatPrice(quote.globalSurchargeAUD)}
+                    </p>
+                  </>
+                ) : null}
                 <p>Subtotal: {formatPrice(quote.subtotalAUD)}</p>
                 <p>Shipping: {formatPrice(quote.shippingAUD)}</p>
                 <p className={quote.discountAmountAUD > 0 ? "text-emerald-300" : ""}>

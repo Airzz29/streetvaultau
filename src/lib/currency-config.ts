@@ -124,3 +124,10 @@ export function findCurrencyForCountry(code: string): CurrencyCode {
   const row = SHIPPING_COUNTRIES.find((c) => c.code === code);
   return row?.currency ?? "USD";
 }
+
+/** English shipping country name for checkout / forms (matches stored address labels). */
+export function getShippingCountryDisplayName(code: string | null | undefined): string | null {
+  if (!code?.trim()) return null;
+  const row = SHIPPING_COUNTRIES.find((c) => c.code === code.trim().toUpperCase());
+  return row?.name ?? null;
+}

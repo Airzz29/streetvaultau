@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { CartItem } from "@/types/product";
 import {
-  buildPricedCheckoutItems,
+  computeCheckoutPricingSummary,
   computeShippingForItems,
   createUserAddress,
   getUserAddressById,
@@ -102,8 +102,14 @@ export async function POST(request: NextRequest) {
 
   let pricedItems: CartItem[];
   let orderChannel: "local" | "dropship";
+  let retailSubtotalAUD: number;
+  let globalSurchargeAUD: number;
   try {
-    ({ pricedItems, orderChannel } = buildPricedCheckoutItems(body.items, address.country));
+    const summary = computeCheckoutPricingSummary(body.items, address.country);
+    pricedItems = summary.pricedItems;
+    orderChannel = summary.orderChannel;
+    retailSubtotalAUD = summary.retailSubtotalAUD;
+    globalSurchargeAUD = summary.globalSurchargeAUD;
   } catch {
     return NextResponse.json({ error: "Cart could not be priced." }, { status: 400 });
   }
@@ -129,6 +135,8 @@ export async function POST(request: NextRequest) {
   }
   return NextResponse.json({
     subtotalAUD: subtotal,
+    retailSubtotalAUD,
+    globalSurchargeAUD,
     shippingAUD: shipping,
     discountAmountAUD,
     discountCode,

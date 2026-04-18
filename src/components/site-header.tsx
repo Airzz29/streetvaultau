@@ -2,18 +2,33 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useCart } from "@/context/cart-context";
 import { categoryNavItems } from "@/components/category-nav";
 import { CurrencyPickerButton } from "@/components/currency-picker-button";
 import { ShippingRegionModal } from "@/components/shipping-region-modal";
 
-export function SiteHeader({ initialLoggedIn = false }: { initialLoggedIn?: boolean }) {
+export function SiteHeader() {
   const pathname = usePathname();
   const { totalItems } = useCart();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const loggedIn = initialLoggedIn;
+  const [loggedIn, setLoggedIn] = useState(false);
   const isAdmin = pathname?.startsWith("/admin") ?? false;
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/auth/session", { cache: "no-store", credentials: "include" })
+      .then((res) => res.json())
+      .then((data: { user?: { id?: string } | null }) => {
+        if (!cancelled) setLoggedIn(Boolean(data?.user?.id));
+      })
+      .catch(() => {
+        if (!cancelled) setLoggedIn(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname]);
 
   return (
     <>
@@ -161,7 +176,6 @@ export function SiteHeader({ initialLoggedIn = false }: { initialLoggedIn?: bool
         </div>
       </div>
     </header>
-    {!isAdmin ? <ShippingRegionModal /> : null}
     </>
   );
 }

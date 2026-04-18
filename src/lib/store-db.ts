@@ -1659,6 +1659,30 @@ export function validateCartStockForCheckout(items: CartItem[], shippingCountry:
   return { ok: true as const };
 }
 
+/** Retail subtotal (variant base AUD) vs priced subtotal (with global surcharge when applicable). */
+export function computeCheckoutPricingSummary(items: CartItem[], shippingCountry: string) {
+  const { pricedItems, orderChannel } = buildPricedCheckoutItems(items, shippingCountry);
+  let retailSubtotalAUD = 0;
+  for (const item of items) {
+    const variant = getVariantById(item.variantId);
+    if (!variant) continue;
+    retailSubtotalAUD += variant.price * item.quantity;
+  }
+  const pricedSubtotalAUD = pricedItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+  const globalSurchargeAUD = Math.max(
+    0,
+    Math.round((pricedSubtotalAUD - retailSubtotalAUD) * 100) / 100
+  );
+  return {
+    pricedItems,
+    orderChannel,
+    retailSubtotalAUD,
+    pricedSubtotalAUD,
+    globalSurchargeAUD,
+    shipsFromAustraliaContext: isAustraliaShipping(shippingCountry),
+  };
+}
+
 /** Recompute per-line AUD unit prices from variant base + global surcharge rules. */
 export function buildPricedCheckoutItems(items: CartItem[], shippingCountry: string) {
   const lineChannels: FulfillmentChannel[] = [];

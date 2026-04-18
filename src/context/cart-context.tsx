@@ -3,8 +3,9 @@
 import {
   createContext,
   ReactNode,
-  useEffect,
+  useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -26,6 +27,9 @@ type CartContextValue = {
 
 const CartContext = createContext<CartContextValue | null>(null);
 
+const GUEST_CART_KEY = "streetvault-cart-guest-v1";
+const LEGACY_CART_KEYS = ["streetvault-cart-v3", "qadir-cart-v2"];
+
 function getCartMergeKey(item: CartItem) {
   return item.bundleId ? `${item.bundleId}::${item.variantId}` : item.variantId;
 }
@@ -35,139 +39,193 @@ function normalizeItems(items: CartItem[]) {
     .filter((item) => item.variantId && item.productId && item.quantity > 0)
     .map((item) => ({
       ...item,
-      quantity: Math.max(1, Math.floor(item.quantity)),
+      quantity: Math.min(99, Math.max(1, Math.floor(item.quantity))),
       shippingRateAUD: item.shippingRateAUD ?? 0,
     }));
 }
 
-function mergeCartItems(localItems: CartItem[], accountItems: CartItem[]) {
-  const merged = new Map<string, CartItem>();
-  for (const item of [...accountItems, ...localItems]) {
-    const key = getCartMergeKey(item);
-    const existing = merged.get(key);
-    if (!existing) {
-      merged.set(key, { ...item });
+function loadGuestCartFromStorage(): CartItem[] {
+  if (typeof window === "undefined") return [];
+  const direct = window.localStorage.getItem(GUEST_CART_KEY);
+  if (direct) {
+    try {
+      return normalizeItems(JSON.parse(direct) as CartItem[]);
+    } catch {
+      // fall through
+    }
+  }
+  for (const key of LEGACY_CART_KEYS) {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) continue;
+    try {
+      const parsed = normalizeItems(JSON.parse(raw) as CartItem[]);
+      window.localStorage.setItem(GUEST_CART_KEY, JSON.stringify(parsed));
+      LEGACY_CART_KEYS.forEach((k) => window.localStorage.removeItem(k));
+      return parsed;
+    } catch {
       continue;
     }
-    merged.set(key, {
-      ...existing,
-      quantity: existing.quantity + item.quantity,
-    });
   }
-  return Array.from(merged.values());
+  return [];
+}
+
+function persistGuestCart(items: CartItem[]) {
+  try {
+    window.localStorage.setItem(GUEST_CART_KEY, JSON.stringify(normalizeItems(items)));
+    LEGACY_CART_KEYS.forEach((k) => window.localStorage.removeItem(k));
+  } catch {
+    // ignore
+  }
 }
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
-  const [storageReady, setStorageReady] = useState(false);
+  const [bootstrapped, setBootstrapped] = useState(false);
+  const [sessionUserId, setSessionUserId] = useState<string | null>(null);
+  const sessionUserIdRef = useRef<string | null>(null);
+  const prevUserRef = useRef<string | null>(null);
+  const skipNextPut = useRef(false);
   const [recentAdd, setRecentAdd] = useState<CartItem | null>(null);
-  const [accountSyncReady, setAccountSyncReady] = useState(false);
-  const [accountUserId, setAccountUserId] = useState<string | null>(null);
-  const skipNextSync = useRef(false);
-  const localItemsAtBootRef = useRef<CartItem[]>([]);
 
   useEffect(() => {
-    const raw =
-      window.localStorage.getItem("streetvault-cart-v3") ??
-      window.localStorage.getItem("qadir-cart-v2");
-    if (raw) {
-      try {
-        const parsed = (JSON.parse(raw) as CartItem[]).map((item) => ({
-          ...item,
-          shippingRateAUD: item.shippingRateAUD ?? 0,
-        }));
-        localItemsAtBootRef.current = parsed;
-        setItems(parsed);
-      } catch {
-        localItemsAtBootRef.current = [];
-        setItems([]);
+    sessionUserIdRef.current = sessionUserId;
+  }, [sessionUserId]);
+
+  const bootstrapCart = useCallback(async () => {
+    try {
+      const meResponse = await fetch("/api/auth/me", { cache: "no-store", credentials: "include" });
+      const meData = (await meResponse.json()) as { user?: { id: string } | null };
+      const uid = meData.user?.id ?? null;
+      const prev = prevUserRef.current;
+      prevUserRef.current = uid;
+
+      if (prev !== null && uid === null) {
+        skipNextPut.current = true;
+        const guest = loadGuestCartFromStorage();
+        setItems(guest);
+        setSessionUserId(null);
+        sessionUserIdRef.current = null;
+        setBootstrapped(true);
+        return;
       }
-    }
-    setStorageReady(true);
-  }, []);
 
-  useEffect(() => {
-    if (!storageReady) return;
-    window.localStorage.setItem("streetvault-cart-v3", JSON.stringify(items));
-  }, [items, storageReady]);
-
-  useEffect(() => {
-    let active = true;
-    const loadAccountCart = async () => {
-      try {
-        const meResponse = await fetch("/api/auth/me", { cache: "no-store" });
-        const meData = (await meResponse.json()) as { user?: { id: string } | null };
-        const userId = meData.user?.id ?? null;
-        if (!active) return;
-        setAccountUserId(userId);
-        if (!userId) {
-          setAccountSyncReady(true);
-          return;
-        }
-        const cartResponse = await fetch("/api/account/cart", { cache: "no-store" });
+      if (uid) {
+        skipNextPut.current = true;
+        const cartResponse = await fetch("/api/account/cart", { cache: "no-store", credentials: "include" });
         if (!cartResponse.ok) {
-          setAccountSyncReady(true);
+          setItems([]);
+          setSessionUserId(uid);
+          sessionUserIdRef.current = uid;
+          setBootstrapped(true);
           return;
         }
         const cartData = (await cartResponse.json()) as { items?: CartItem[] };
-        if (!active) return;
-        const merged = normalizeItems(
-          mergeCartItems(localItemsAtBootRef.current, cartData.items ?? [])
-        );
-        skipNextSync.current = true;
-        setItems(merged);
+        const serverItems = normalizeItems(cartData.items ?? []);
+        setItems(serverItems);
+        setSessionUserId(uid);
+        sessionUserIdRef.current = uid;
+        LEGACY_CART_KEYS.forEach((k) => {
+          try {
+            window.localStorage.removeItem(k);
+          } catch {
+            // ignore
+          }
+        });
         await fetch("/api/account/cart", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ items: merged }),
+          credentials: "include",
+          body: JSON.stringify({ items: serverItems }),
+        }).catch(() => {
+          // non-blocking
         });
-      } catch {
-        // Keep local cart experience even if account sync fails.
-      } finally {
-        if (active) {
-          setAccountSyncReady(true);
-        }
+        setBootstrapped(true);
+        return;
       }
-    };
-    if (storageReady) {
-      loadAccountCart();
+
+      LEGACY_CART_KEYS.forEach((k) => {
+        try {
+          const legacy = window.localStorage.getItem(k);
+          if (legacy && !window.localStorage.getItem(GUEST_CART_KEY)) {
+            window.localStorage.setItem(GUEST_CART_KEY, legacy);
+          }
+          window.localStorage.removeItem(k);
+        } catch {
+          // ignore
+        }
+      });
+      setItems(loadGuestCartFromStorage());
+      setSessionUserId(null);
+      sessionUserIdRef.current = null;
+      setBootstrapped(true);
+    } catch {
+      setItems(loadGuestCartFromStorage());
+      setSessionUserId(null);
+      sessionUserIdRef.current = null;
+      setBootstrapped(true);
     }
-    return () => {
-      active = false;
-    };
-  }, [storageReady]);
+  }, []);
 
   useEffect(() => {
-    if (!storageReady || !accountSyncReady || !accountUserId) return;
-    if (skipNextSync.current) {
-      skipNextSync.current = false;
+    void bootstrapCart();
+  }, [bootstrapCart]);
+
+  useEffect(() => {
+    const onFocus = () => {
+      void fetch("/api/auth/me", { cache: "no-store", credentials: "include" })
+        .then((r) => r.json())
+        .then((data: { user?: { id: string } | null }) => {
+          const uid = data.user?.id ?? null;
+          if (uid !== sessionUserIdRef.current) {
+            window.location.reload();
+          }
+        })
+        .catch(() => {
+          // ignore
+        });
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, []);
+
+  useEffect(() => {
+    if (!bootstrapped || sessionUserId) return;
+    persistGuestCart(items);
+  }, [items, bootstrapped, sessionUserId]);
+
+  useEffect(() => {
+    if (!bootstrapped || !sessionUserId) return;
+    if (skipNextPut.current) {
+      skipNextPut.current = false;
       return;
     }
     const timer = globalThis.setTimeout(() => {
       fetch("/api/account/cart", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ items: normalizeItems(items) }),
       }).catch(() => {
-        // Non-blocking: local cart still works.
+        // non-blocking
       });
     }, 180);
     return () => globalThis.clearTimeout(timer);
-  }, [accountSyncReady, accountUserId, items, storageReady]);
+  }, [bootstrapped, sessionUserId, items]);
 
   const addItem = (incomingItem: CartItem) => {
     setRecentAdd(incomingItem);
     setItems((currentItems) => {
       const incomingKey = getCartMergeKey(incomingItem);
-      const existingIndex = currentItems.findIndex(
-        (item) => getCartMergeKey(item) === incomingKey
-      );
+      const existingIndex = currentItems.findIndex((item) => getCartMergeKey(item) === incomingKey);
 
       if (existingIndex >= 0) {
         const updated = [...currentItems];
         updated[existingIndex] = {
           ...updated[existingIndex],
-          quantity: updated[existingIndex].quantity + incomingItem.quantity,
+          quantity: Math.min(
+            99,
+            updated[existingIndex].quantity + incomingItem.quantity
+          ),
         };
         return updated;
       }
@@ -181,9 +239,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   };
 
   const removeItem = (variantId: string) => {
-    setItems((currentItems) =>
-      currentItems.filter((item) => item.variantId !== variantId)
-    );
+    setItems((currentItems) => currentItems.filter((item) => item.variantId !== variantId));
   };
 
   const removeBundle = (bundleId: string) => {
@@ -198,19 +254,22 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
     setItems((currentItems) =>
       currentItems.map((item) =>
-        item.variantId === variantId ? { ...item, quantity } : item
+        item.variantId === variantId ? { ...item, quantity: Math.min(99, quantity) } : item
       )
     );
   };
 
   const clearCart = () => {
     setItems([]);
-    if (accountUserId) {
-      fetch("/api/account/cart", { method: "DELETE" }).catch(() => {
-        // Keep local clear even if API is unavailable.
+    if (sessionUserId) {
+      fetch("/api/account/cart", { method: "DELETE", credentials: "include" }).catch(() => {
+        // ignore
       });
+    } else {
+      persistGuestCart([]);
     }
   };
+
   const dismissRecentAdd = () => setRecentAdd(null);
 
   const totalItems = useMemo(
